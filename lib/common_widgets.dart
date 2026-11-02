@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'date_helpers.dart';
 import 'exercise_details_sheet.dart';
+import 'workout_models.dart';
 
 class AppPage extends StatelessWidget {
   const AppPage({required this.children, super.key});
@@ -29,18 +30,19 @@ class AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Row(
       children: [
         Container(
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: appLime,
+            color: colors.accent,
             borderRadius: BorderRadius.circular(11),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.fitness_center_rounded,
-            color: appBackground,
+            color: colors.background,
             size: 19,
           ),
         ),
@@ -60,26 +62,23 @@ class AppHeader extends StatelessWidget {
             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Nie masz nowych powiadomień.')),
             ),
-            icon: const Icon(
-              Icons.notifications_none_rounded,
-              color: Colors.white70,
-            ),
+            icon: Icon(Icons.notifications_none_rounded, color: colors.muted),
           ),
           const SizedBox(width: 4),
           Container(
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: appSurfaceLight,
+              color: colors.surfaceLight,
               borderRadius: BorderRadius.circular(13),
             ),
-            child: const Icon(Icons.person_rounded, size: 21, color: appLime),
+            child: Icon(Icons.person_rounded, size: 21, color: colors.accent),
           ),
         ] else
           Text(
             monthLabel(DateTime.now()).toUpperCase(),
-            style: const TextStyle(
-              color: appMuted,
+            style: TextStyle(
+              color: colors.muted,
               fontSize: 11,
               letterSpacing: 1,
             ),
@@ -97,6 +96,7 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Row(
       children: [
         Expanded(
@@ -106,26 +106,23 @@ class SectionTitle extends StatelessWidget {
           ),
         ),
         if (trailing != null)
-          Text(trailing!, style: const TextStyle(color: appMuted, fontSize: 11)),
+          Text(trailing!, style: TextStyle(color: colors.muted, fontSize: 11)),
       ],
     );
   }
 }
 
 class RoundIconButton extends StatelessWidget {
-  const RoundIconButton({
-    required this.icon,
-    required this.onTap,
-    super.key,
-  });
+  const RoundIconButton({required this.icon, required this.onTap, super.key});
 
   final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Material(
-      color: appSurfaceLight,
+      color: colors.surfaceLight,
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         borderRadius: BorderRadius.circular(13),
@@ -133,7 +130,11 @@ class RoundIconButton extends StatelessWidget {
         child: SizedBox(
           width: 42,
           height: 42,
-          child: Icon(icon, color: Colors.white70, size: 20),
+          child: Icon(
+            icon,
+            color: colors.foreground.withValues(alpha: 0.75),
+            size: 20,
+          ),
         ),
       ),
     );
@@ -143,6 +144,7 @@ class RoundIconButton extends StatelessWidget {
 class WorkoutCard extends StatelessWidget {
   const WorkoutCard({
     required this.completed,
+    required this.workout,
     required this.onStart,
     required this.onOpenPlan,
     this.isCalendar = false,
@@ -150,47 +152,50 @@ class WorkoutCard extends StatelessWidget {
   });
 
   final bool completed;
+  final WorkoutPlan workout;
   final bool isCalendar;
   final VoidCallback onStart;
   final VoidCallback onOpenPlan;
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF283326), Color(0xFF1B211C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: colors.surface,
+        border: Border.all(color: colors.accent.withValues(alpha: 0.22)),
         borderRadius: BorderRadius.circular(21),
-        border: Border.all(color: appLime.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const _WorkoutTag('GÓRA CIAŁA'),
+              _WorkoutTag(workout.name.toUpperCase()),
               const Spacer(),
-              const Icon(Icons.schedule_rounded, size: 15, color: appMuted),
+              Icon(Icons.schedule_rounded, size: 15, color: colors.muted),
               const SizedBox(width: 5),
-              const Text(
-                '55 min',
-                style: TextStyle(color: appMuted, fontSize: 12),
+              Text(
+                '${workout.estimatedMinutes} min',
+                style: TextStyle(color: colors.muted, fontSize: 12),
               ),
             ],
           ),
           const SizedBox(height: 13),
-          const Text(
-            'Siła i budowanie\nmięśni',
-            style: TextStyle(fontSize: 22, height: 1.2, fontWeight: FontWeight.w800),
+          Text(
+            workout.name,
+            style: TextStyle(
+              color: colors.foreground,
+              fontSize: 22,
+              height: 1.2,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 7),
-          const Text(
-            'Klatka • plecy • ramiona',
-            style: TextStyle(color: appMuted, fontSize: 12),
+          Text(
+            '${workout.exercises.length} ćwiczeń • przerwa ${workout.restSeconds} s',
+            style: TextStyle(color: colors.muted, fontSize: 12),
           ),
           const SizedBox(height: 17),
           Row(
@@ -212,10 +217,14 @@ class WorkoutCard extends StatelessWidget {
                         : (isCalendar ? 'Wykonaj trening' : 'Zacznij trening'),
                   ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: appLime,
-                    disabledBackgroundColor: appLime.withValues(alpha: 0.3),
-                    foregroundColor: appBackground,
-                    disabledForegroundColor: Colors.white70,
+                    backgroundColor: colors.accent,
+                    disabledBackgroundColor: colors.accent.withValues(
+                      alpha: 0.3,
+                    ),
+                    foregroundColor: colors.foreground,
+                    disabledForegroundColor: colors.foreground.withValues(
+                      alpha: 0.65,
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     textStyle: const TextStyle(fontWeight: FontWeight.w800),
                     shape: RoundedRectangleBorder(
@@ -238,28 +247,30 @@ class WorkoutCard extends StatelessWidget {
 }
 
 class WeeklyActivityChart extends StatelessWidget {
-  const WeeklyActivityChart({
-    required this.completedWorkouts,
-    super.key,
-  });
+  const WeeklyActivityChart({required this.completedWorkouts, super.key});
 
   final Set<DateTime> completedWorkouts;
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     final today = dateOnly(DateTime.now());
     final monday = today.subtract(Duration(days: today.weekday - 1));
-    final weekDates = List.generate(7, (index) => monday.add(Duration(days: index)));
+    final weekDates = List.generate(
+      7,
+      (index) => monday.add(Duration(days: index)),
+    );
     final weeklyCount = weekDates
         .where(
-          (date) => completedWorkouts.any((completed) => sameDate(date, completed)),
+          (date) =>
+              completedWorkouts.any((completed) => sameDate(date, completed)),
         )
         .length;
 
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: appSurface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.035)),
       ),
@@ -276,7 +287,7 @@ class WeeklyActivityChart extends StatelessWidget {
               ),
               Text(
                 '$weeklyCount treningów',
-                style: const TextStyle(color: appLime, fontSize: 12),
+                style: TextStyle(color: colors.accent, fontSize: 12),
               ),
             ],
           ),
@@ -300,8 +311,8 @@ class WeeklyActivityChart extends StatelessWidget {
                       children: [
                         Text(
                           trained ? '100' : '',
-                          style: const TextStyle(
-                            color: appLime,
+                          style: TextStyle(
+                            color: colors.accent,
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                           ),
@@ -313,11 +324,15 @@ class WeeklyActivityChart extends StatelessWidget {
                           height: trained ? 48 : (isToday ? 12 : 5),
                           decoration: BoxDecoration(
                             color: trained
-                                ? appLime
-                                : (isToday ? appLime.withValues(alpha: 0.4) : appSurfaceLight),
+                                ? colors.accent
+                                : (isToday
+                                      ? colors.accent.withValues(alpha: 0.4)
+                                      : colors.surfaceLight),
                             borderRadius: BorderRadius.circular(8),
                             border: isToday && !trained
-                                ? Border.all(color: appLime.withValues(alpha: 0.5))
+                                ? Border.all(
+                                    color: colors.accent.withValues(alpha: 0.5),
+                                  )
                                 : null,
                           ),
                         ),
@@ -325,9 +340,11 @@ class WeeklyActivityChart extends StatelessWidget {
                         Text(
                           shortWeekdays[index],
                           style: TextStyle(
-                            color: isToday ? Colors.white : appMuted,
+                            color: isToday ? colors.foreground : colors.muted,
                             fontSize: 10,
-                            fontWeight: isToday ? FontWeight.w700 : FontWeight.normal,
+                            fontWeight: isToday
+                                ? FontWeight.w700
+                                : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -350,17 +367,20 @@ class RankCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     final next = nextRankPoints(points);
     final floor = currentRankFloor(points);
-    final progress = next == floor ? 1.0 : ((points - floor) / (next - floor)).clamp(0.0, 1.0);
+    final progress = next == floor
+        ? 1.0
+        : ((points - floor) / (next - floor)).clamp(0.0, 1.0);
     final pointsToNext = (next - points).clamp(0, next);
 
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: appSurface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: appLime.withValues(alpha: 0.16)),
+        border: Border.all(color: colors.accent.withValues(alpha: 0.16)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,10 +391,10 @@ class RankCard extends StatelessWidget {
                 width: 43,
                 height: 43,
                 decoration: BoxDecoration(
-                  color: appLime.withValues(alpha: 0.12),
+                  color: colors.accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.military_tech_rounded, color: appLime),
+                child: Icon(Icons.military_tech_rounded, color: colors.accent),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -388,12 +408,12 @@ class RankCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '$points pkt • 100 pkt za trening',
-                      style: const TextStyle(color: appMuted, fontSize: 11),
+                      style: TextStyle(color: colors.muted, fontSize: 11),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.stars_rounded, color: appLime, size: 25),
+              Icon(Icons.stars_rounded, color: colors.accent, size: 25),
             ],
           ),
           const SizedBox(height: 16),
@@ -402,8 +422,8 @@ class RankCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 7,
-              backgroundColor: appSurfaceLight,
-              valueColor: const AlwaysStoppedAnimation(appLime),
+              backgroundColor: colors.surfaceLight,
+              valueColor: AlwaysStoppedAnimation(colors.accent),
             ),
           ),
           const SizedBox(height: 8),
@@ -411,7 +431,7 @@ class RankCard extends StatelessWidget {
             pointsToNext == 0
                 ? 'Maksymalna ranga osiągnięta!'
                 : 'Jeszcze $pointsToNext pkt do rangi ${_nextRankName(points)}',
-            style: const TextStyle(color: appMuted, fontSize: 11),
+            style: TextStyle(color: colors.muted, fontSize: 11),
           ),
         ],
       ),
@@ -442,10 +462,11 @@ class ExerciseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Material(
-        color: appSurface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(17),
         child: InkWell(
           borderRadius: BorderRadius.circular(17),
@@ -458,10 +479,10 @@ class ExerciseTile extends StatelessWidget {
                   width: 49,
                   height: 49,
                   decoration: BoxDecoration(
-                    color: appSurfaceLight,
+                    color: colors.surfaceLight,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(icon, color: appLime, size: 23),
+                  child: Icon(icon, color: colors.accent, size: 23),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -470,12 +491,15 @@ class ExerciseTile extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 5),
                       Text(
                         subtitle,
-                        style: const TextStyle(color: appMuted, fontSize: 11),
+                        style: TextStyle(color: colors.muted, fontSize: 11),
                       ),
                     ],
                   ),
@@ -489,7 +513,11 @@ class ExerciseTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(Icons.chevron_right_rounded, color: appMuted, size: 19),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: colors.muted,
+                  size: 19,
+                ),
               ],
             ),
           ),
@@ -515,17 +543,30 @@ class ProfileOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: appSurface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
         child: ListTile(
-          leading: Icon(icon, color: appLime, size: 21),
-          title: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          subtitle: Text(subtitle, style: const TextStyle(color: appMuted, fontSize: 11)),
-          trailing: const Icon(Icons.chevron_right_rounded, color: appMuted, size: 19),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          leading: Icon(icon, color: colors.accent, size: 21),
+          title: Text(
+            title,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: TextStyle(color: colors.muted, fontSize: 11),
+          ),
+          trailing: Icon(
+            Icons.chevron_right_rounded,
+            color: colors.muted,
+            size: 19,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           onTap: onTap,
         ),
       ),
@@ -534,14 +575,16 @@ class ProfileOption extends StatelessWidget {
 }
 
 class NoteCard extends StatelessWidget {
-  const NoteCard({required this.onTap, super.key});
+  const NoteCard({required this.note, required this.onTap, super.key});
 
+  final String note;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Material(
-      color: const Color(0xFF24271F),
+      color: colors.surface,
       borderRadius: BorderRadius.circular(17),
       child: InkWell(
         borderRadius: BorderRadius.circular(17),
@@ -550,112 +593,44 @@ class NoteCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(17),
-            border: Border.all(color: const Color(0xFF4A4A32).withValues(alpha: 0.55)),
+            border: Border.all(color: colors.muted.withValues(alpha: 0.25)),
           ),
-          child: const Row(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.sticky_note_2_outlined, color: appLime, size: 20),
+              Icon(
+                Icons.sticky_note_2_outlined,
+                color: colors.accent,
+                size: 20,
+              ),
               SizedBox(width: 11),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Twoja notatka', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    Text(
+                      'Twoja notatka',
+                      style: TextStyle(
+                        color: colors.foreground,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     SizedBox(height: 6),
                     Text(
-                      'Pamiętaj o rozgrzewce barków. Spróbuj dziś 42,5 kg w ostatniej serii.',
-                      style: TextStyle(color: Color(0xFFB2B7AC), height: 1.45, fontSize: 12),
+                      note.isEmpty ? 'Dotknij, aby dodać notatkę.' : note,
+                      style: TextStyle(
+                        color: colors.muted,
+                        height: 1.45,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.edit_outlined, color: appMuted, size: 17),
+              Icon(Icons.edit_outlined, color: colors.muted, size: 17),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class TrainingSessionSheet extends StatelessWidget {
-  const TrainingSessionSheet({
-    required this.onComplete,
-    super.key,
-  });
-
-  final VoidCallback onComplete;
-
-  @override
-  Widget build(BuildContext context) {
-    final exercises = [
-      ('Wyciskanie sztangi', Icons.fitness_center_rounded),
-      ('Wiosłowanie hantlą', Icons.sports_gymnastics_rounded),
-      ('Wyciskanie żołnierskie', Icons.accessibility_new_rounded),
-      ('Uginanie ramion', Icons.sports_handball_rounded),
-    ];
-
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        decoration: const BoxDecoration(
-          color: appSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Trening góry ciała',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              '4 ćwiczenia • około 55 minut',
-              style: TextStyle(color: appMuted, fontSize: 12),
-            ),
-            const SizedBox(height: 14),
-            ...exercises.map(
-              (exercise) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(exercise.$2, color: appLime),
-                title: Text(exercise.$1, style: const TextStyle(fontSize: 13)),
-                trailing: const Icon(Icons.chevron_right_rounded, color: appMuted),
-                onTap: () => showExerciseDetails(context, exercise.$1),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  onComplete();
-                },
-                icon: const Icon(Icons.flag_rounded),
-                label: const Text('Zakończ i odbierz 100 pkt'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: appLime,
-                  foregroundColor: appBackground,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w800),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -669,16 +644,17 @@ class _WorkoutTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: appLime.withValues(alpha: 0.12),
+        color: colors.accent.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: appLime,
+        style: TextStyle(
+          color: colors.accent,
           letterSpacing: 0.8,
           fontSize: 9,
           fontWeight: FontWeight.w800,

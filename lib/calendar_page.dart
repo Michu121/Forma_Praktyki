@@ -3,20 +3,40 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'common_widgets.dart';
 import 'date_helpers.dart';
+import 'note_editor.dart';
+import 'training_session_sheet.dart';
+import 'workout_builder_sheet.dart';
+import 'workout_models.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({
     required this.selectedDate,
     required this.completedWorkouts,
+    required this.workouts,
+    required this.templates,
+    required this.dayNote,
     required this.onSelectDate,
+    required this.onSaveWorkout,
+    required this.onCreateTemplate,
+    required this.onSaveDayNote,
+    required this.onSaveWorkoutNote,
     required this.onCompleteWorkout,
+    required this.defaultRestSeconds,
     super.key,
   });
 
   final DateTime selectedDate;
   final Set<DateTime> completedWorkouts;
+  final Map<DateTime, WorkoutPlan> workouts;
+  final List<WorkoutPlan> templates;
+  final String dayNote;
   final ValueChanged<DateTime> onSelectDate;
+  final void Function(DateTime date, WorkoutPlan plan) onSaveWorkout;
+  final ValueChanged<WorkoutPlan> onCreateTemplate;
+  final void Function(DateTime date, String note) onSaveDayNote;
+  final void Function(DateTime date, String note) onSaveWorkoutNote;
   final ValueChanged<DateTime> onCompleteWorkout;
+  final int defaultRestSeconds;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -28,41 +48,69 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void initState() {
     super.initState();
-    _visibleMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month);
+    _visibleMonth = DateTime(
+      widget.selectedDate.year,
+      widget.selectedDate.month,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final today = dateOnly(DateTime.now());
     final selectedDate = dateOnly(widget.selectedDate);
-    final isSelectedCompleted = _isCompleted(selectedDate);
+    final isCompleted = _isCompleted(selectedDate);
+    final workout = _workoutOn(selectedDate);
+    final colors = GymColors.of(context);
 
     return AppPage(
       children: [
         const AppHeader(),
         const SizedBox(height: 27),
-        const Text(
+        Text(
           'Kalendarz',
-          style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: colors.foreground,
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Twój rytm, Twoje tempo.',
-          style: TextStyle(color: appMuted),
-        ),
+        Text('Twój rytm, Twoje tempo.', style: TextStyle(color: colors.muted)),
         const SizedBox(height: 22),
         _monthCard(today, selectedDate),
         const SizedBox(height: 24),
         SectionTitle(
           fullDateLabel(selectedDate),
-          trailing: isSelectedCompleted ? 'Trening wykonany' : 'Plan treningowy',
+          trailing: isCompleted ? 'Trening wykonany' : null,
         ),
         const SizedBox(height: 12),
-        WorkoutCard(
-          isCalendar: true,
-          completed: isSelectedCompleted,
-          onStart: () => _startWorkout(context, selectedDate),
-          onOpenPlan: () => _startWorkout(context, selectedDate),
+        if (workout != null)
+          WorkoutCard(
+            workout: workout,
+            isCalendar: true,
+            completed: isCompleted,
+            onStart: () => _startWorkout(context, selectedDate, workout),
+            onOpenPlan: () => _editWorkoutNote(context, selectedDate, workout),
+          )
+        else
+          _EmptyWorkoutCard(
+            onAdd: () => _scheduleWorkout(context, selectedDate),
+          ),
+        if (workout != null) ...[
+          const SizedBox(height: 12),
+          SectionTitle('Notatka do treningu'),
+          const SizedBox(height: 8),
+          NoteCard(
+            note: workout.note,
+            onTap: () => _editWorkoutNote(context, selectedDate, workout),
+          ),
+        ],
+        const SizedBox(height: 20),
+        SectionTitle('Notatka do dnia'),
+        const SizedBox(height: 8),
+        NoteCard(
+          note: widget.dayNote,
+          onTap: () => _editDayNote(context, selectedDate),
         ),
         const SizedBox(height: 20),
         const SectionTitle('Oznaczenia'),
@@ -75,14 +123,19 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _monthCard(DateTime today, DateTime selectedDate) {
+    final colors = GymColors.of(context);
     final firstOfMonth = DateTime(_visibleMonth.year, _visibleMonth.month);
     final leadingDays = firstOfMonth.weekday - 1;
-    final daysInMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0).day;
+    final daysInMonth = DateTime(
+      _visibleMonth.year,
+      _visibleMonth.month + 1,
+      0,
+    ).day;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(17, 18, 17, 16),
       decoration: BoxDecoration(
-        color: appSurface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -92,7 +145,11 @@ class _CalendarPageState extends State<CalendarPage> {
               Expanded(
                 child: Text(
                   monthLabel(_visibleMonth),
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: colors.foreground,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               RoundIconButton(
@@ -114,8 +171,8 @@ class _CalendarPageState extends State<CalendarPage> {
                     child: Center(
                       child: Text(
                         day,
-                        style: const TextStyle(
-                          color: appMuted,
+                        style: TextStyle(
+                          color: colors.muted,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -135,14 +192,18 @@ class _CalendarPageState extends State<CalendarPage> {
                   if (dayNumber < 1 || dayNumber > daysInMonth) {
                     return const Expanded(child: SizedBox(height: 46));
                   }
-                  final date = DateTime(_visibleMonth.year, _visibleMonth.month, dayNumber);
+                  final date = DateTime(
+                    _visibleMonth.year,
+                    _visibleMonth.month,
+                    dayNumber,
+                  );
                   return Expanded(
                     child: _DayCell(
                       date: date,
                       isToday: sameDate(date, today),
                       isSelected: sameDate(date, selectedDate),
                       isCompleted: _isCompleted(date),
-                      hasPlannedWorkout: _hasPlannedWorkout(date),
+                      hasPlannedWorkout: _workoutOn(date) != null,
                       onTap: () => widget.onSelectDate(date),
                     ),
                   );
@@ -158,24 +219,89 @@ class _CalendarPageState extends State<CalendarPage> {
   bool _isCompleted(DateTime date) =>
       widget.completedWorkouts.any((completed) => sameDate(completed, date));
 
-  bool _hasPlannedWorkout(DateTime date) =>
-      date.weekday == DateTime.monday ||
-      date.weekday == DateTime.wednesday ||
-      date.weekday == DateTime.friday;
+  WorkoutPlan? _workoutOn(DateTime date) {
+    for (final entry in widget.workouts.entries) {
+      if (sameDate(entry.key, date)) return entry.value;
+    }
+    return null;
+  }
 
   void _changeMonth(int offset) {
     setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + offset);
+      _visibleMonth = DateTime(
+        _visibleMonth.year,
+        _visibleMonth.month + offset,
+      );
     });
     widget.onSelectDate(_visibleMonth);
   }
 
-  void _startWorkout(BuildContext context, DateTime date) {
+  Future<void> _scheduleWorkout(BuildContext context, DateTime date) async {
+    final selected = await showModalBottomSheet<Object>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(16),
+          children: [
+            const ListTile(
+              title: Text('Wybierz schemat'),
+              subtitle: Text('Zaplanuj trening na wybrany dzień.'),
+            ),
+            for (final template in widget.templates)
+              ListTile(
+                leading: Icon(template.type.icon),
+                title: Text(template.name),
+                subtitle: Text('${template.exercises.length} ćwiczeń'),
+                onTap: () => Navigator.pop(sheetContext, template),
+              ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline_rounded),
+              title: const Text('Utwórz nowy schemat'),
+              onTap: () => Navigator.pop(sheetContext, true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    if (selected is WorkoutPlan) {
+      widget.onSaveWorkout(date, selected);
+    } else if (selected == true) {
+      final plan = await showWorkoutBuilder(
+        context,
+        defaultRestSeconds: widget.defaultRestSeconds,
+      );
+      if (!mounted) return;
+      if (plan != null) {
+        widget.onCreateTemplate(plan);
+        widget.onSaveWorkout(date, plan);
+      }
+    }
+  }
+
+  Future<void> _editDayNote(BuildContext context, DateTime date) async {
+    final note = await showNoteEditor(context, initialText: widget.dayNote);
+    if (note != null) widget.onSaveDayNote(date, note);
+  }
+
+  Future<void> _editWorkoutNote(
+    BuildContext context,
+    DateTime date,
+    WorkoutPlan workout,
+  ) async {
+    final note = await showNoteEditor(context, initialText: workout.note);
+    if (note != null) widget.onSaveWorkoutNote(date, note);
+  }
+
+  void _startWorkout(BuildContext context, DateTime date, WorkoutPlan workout) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => TrainingSessionSheet(
+        workout: workout,
         onComplete: () {
           Navigator.of(sheetContext).pop();
           widget.onCompleteWorkout(date);
@@ -204,10 +330,13 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     final background = isSelected
-        ? appLime
-        : (isCompleted ? const Color(0xFF3B542A) : Colors.transparent);
-    final foreground = isSelected ? appBackground : Colors.white;
+        ? colors.accent
+        : (isCompleted
+              ? colors.accent.withValues(alpha: 0.3)
+              : Colors.transparent);
+    final foreground = isSelected ? colors.background : colors.foreground;
 
     return Semantics(
       button: true,
@@ -232,7 +361,7 @@ class _DayCell extends StatelessWidget {
                     color: background,
                     borderRadius: BorderRadius.circular(11),
                     border: isToday && !isSelected
-                        ? Border.all(color: appLime, width: 1.5)
+                        ? Border.all(color: colors.accent, width: 1.5)
                         : null,
                   ),
                   child: Text(
@@ -252,8 +381,10 @@ class _DayCell extends StatelessWidget {
                     height: 5,
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? appBackground
-                          : (isCompleted ? appLime : const Color(0xFFF0B86A)),
+                          ? colors.background
+                          : (isCompleted
+                                ? colors.accent
+                                : const Color(0xFFF0B86A)),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -266,18 +397,54 @@ class _DayCell extends StatelessWidget {
   }
 }
 
+class _EmptyWorkoutCard extends StatelessWidget {
+  const _EmptyWorkoutCard({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onAdd,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Icon(Icons.add_circle_outline_rounded, color: colors.accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Wybierz zapisany schemat lub utwórz nowy.',
+                  style: TextStyle(color: colors.muted, fontSize: 12),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: colors.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CalendarLegend extends StatelessWidget {
   const _CalendarLegend();
 
   @override
   Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
     return Row(
-      children: const [
-        _LegendItem(color: appLime, label: 'Wykonany'),
-        SizedBox(width: 17),
-        _LegendItem(color: Color(0xFFF0B86A), label: 'Zaplanowany'),
-        SizedBox(width: 17),
-        _LegendItem(color: Colors.white70, label: 'Dzisiaj'),
+      children: [
+        _LegendItem(color: colors.accent, label: 'Wykonany'),
+        const SizedBox(width: 17),
+        const _LegendItem(color: Color(0xFFF0B86A), label: 'Zaplanowany'),
+        const SizedBox(width: 17),
+        _LegendItem(color: colors.muted, label: 'Dzisiaj'),
       ],
     );
   }
@@ -290,25 +457,23 @@ class _LegendItem extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  Widget build(BuildContext context) => Expanded(
+    child: Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: GymColors.of(context).muted, fontSize: 10),
           ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: appMuted, fontSize: 10),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
