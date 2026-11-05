@@ -88,6 +88,25 @@ class AppHeader extends StatelessWidget {
   }
 }
 
+class AppPageTitle extends StatelessWidget {
+  const AppPageTitle(this.title, {super.key});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: GymColors.of(context).foreground,
+        fontSize: 28,
+        height: 1.2,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.title, {this.trailing, super.key});
 
@@ -108,6 +127,67 @@ class SectionTitle extends StatelessWidget {
         if (trailing != null)
           Text(trailing!, style: TextStyle(color: colors.muted, fontSize: 11)),
       ],
+    );
+  }
+}
+
+class AppSectionHeading extends StatelessWidget {
+  const AppSectionHeading({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: colors.accent),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: colors.foreground,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: TextStyle(color: colors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class AppSurfaceCard extends StatelessWidget {
+  const AppSurfaceCard({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: GymColors.of(context).surface,
+      borderRadius: BorderRadius.circular(appCardRadius),
+      clipBehavior: Clip.antiAlias,
+      child: child,
     );
   }
 }
@@ -165,7 +245,7 @@ class WorkoutCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border.all(color: colors.accent.withValues(alpha: 0.22)),
-        borderRadius: BorderRadius.circular(21),
+        borderRadius: BorderRadius.circular(appCardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,32 +348,45 @@ class WeeklyActivityChart extends StatelessWidget {
         .length;
 
     return Container(
-      padding: const EdgeInsets.all(17),
+      padding: const EdgeInsets.fromLTRB(17, 18, 17, 15),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.035)),
+        borderRadius: BorderRadius.circular(appCardRadius),
+        border: Border.all(color: colors.muted.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Icon(Icons.insights_outlined, color: colors.muted, size: 20),
+              const SizedBox(width: 9),
               const Expanded(
-                child: Text(
-                  'Aktywność w tym tygodniu',
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Aktywność',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    SizedBox(height: 2),
+                    Text('Ten tydzień', style: TextStyle(fontSize: 11)),
+                  ],
                 ),
               ),
               Text(
                 '$weeklyCount treningów',
-                style: TextStyle(color: colors.accent, fontSize: 12),
+                style: TextStyle(
+                  color: colors.accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           SizedBox(
-            height: 112,
+            height: 118,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: List.generate(weekDates.length, (index) {
@@ -305,35 +398,56 @@ class WeeklyActivityChart extends StatelessWidget {
                 return Expanded(
                   child: Semantics(
                     label:
-                        '${shortDateLabel(date)}${trained ? ', trening wykonany' : ''}',
+                        '${shortDateLabel(date)}${trained ? ', trening wykonany' : ', brak treningu'}',
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text(
-                          trained ? '100' : '',
-                          style: TextStyle(
-                            color: colors.accent,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        SizedBox(
+                          height: 17,
+                          child: trained
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  color: colors.accent,
+                                  size: 14,
+                                )
+                              : null,
                         ),
                         const SizedBox(height: 5),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          width: 20,
-                          height: trained ? 48 : (isToday ? 12 : 5),
-                          decoration: BoxDecoration(
-                            color: trained
-                                ? colors.accent
-                                : (isToday
-                                      ? colors.accent.withValues(alpha: 0.4)
-                                      : colors.surfaceLight),
-                            borderRadius: BorderRadius.circular(8),
-                            border: isToday && !trained
-                                ? Border.all(
-                                    color: colors.accent.withValues(alpha: 0.5),
-                                  )
-                                : null,
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              width: 25,
+                              height: 72,
+                              alignment: Alignment.bottomCenter,
+                              decoration: BoxDecoration(
+                                color: colors.surfaceLight,
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOutCubic,
+                                width: 25,
+                                height: trained ? 72 : (isToday ? 18 : 8),
+                                decoration: BoxDecoration(
+                                  color: trained
+                                      ? colors.accent
+                                      : (isToday
+                                            ? colors.accent.withValues(
+                                                alpha: 0.4,
+                                              )
+                                            : colors.surfaceLight),
+                                  borderRadius: BorderRadius.circular(9),
+                                  border: isToday && !trained
+                                      ? Border.all(
+                                          color: colors.accent.withValues(
+                                            alpha: 0.5,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -376,52 +490,47 @@ class RankCard extends StatelessWidget {
     final pointsToNext = (next - points).clamp(0, next);
 
     return Container(
-      padding: const EdgeInsets.all(17),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.accent.withValues(alpha: 0.16)),
+        borderRadius: BorderRadius.circular(appCardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 43,
-                height: 43,
-                decoration: BoxDecoration(
-                  color: colors.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.military_tech_rounded, color: colors.accent),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Ranga: ${rankName(points)}',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                      'Postęp treningowy',
+                      style: TextStyle(
+                        color: colors.foreground,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$points pkt • 100 pkt za trening',
-                      style: TextStyle(color: colors.muted, fontSize: 11),
+                      '${rankName(points)} · $points pkt',
+                      style: TextStyle(color: colors.muted, fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.stars_rounded, color: colors.accent, size: 25),
+              Text(
+                pointsToNext == 0 ? 'Max' : '+100 pkt / trening',
+                style: TextStyle(color: colors.muted, fontSize: 11),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 13),
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: progress,
-              minHeight: 7,
+              minHeight: 5,
               backgroundColor: colors.surfaceLight,
               valueColor: AlwaysStoppedAnimation(colors.accent),
             ),
@@ -429,8 +538,8 @@ class RankCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             pointsToNext == 0
-                ? 'Maksymalna ranga osiągnięta!'
-                : 'Jeszcze $pointsToNext pkt do rangi ${_nextRankName(points)}',
+                ? 'Osiągnięto najwyższą rangę.'
+                : 'Do rangi ${_nextRankName(points)}: $pointsToNext pkt',
             style: TextStyle(color: colors.muted, fontSize: 11),
           ),
         ],
@@ -443,6 +552,91 @@ class RankCard extends StatelessWidget {
     if (value >= 800) return 'Mistrz';
     if (value >= 300) return 'Atleta';
     return 'Regularny';
+  }
+}
+
+class WeeklyWorkoutGoalCard extends StatelessWidget {
+  const WeeklyWorkoutGoalCard({
+    required this.completed,
+    required this.goal,
+    super.key,
+  });
+
+  final int completed;
+  final int goal;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
+    final progress = (completed / goal).clamp(0.0, 1.0);
+    final percent = (progress * 100).round();
+    final remaining = goal - completed;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Cel tygodniowy',
+                  style: TextStyle(
+                    color: colors.foreground,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                '$percent%',
+                style: TextStyle(
+                  color: colors.accent,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: colors.surfaceLight,
+              valueColor: AlwaysStoppedAnimation(colors.accent),
+            ),
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$completed z $goal treningów w tym tygodniu',
+                  style: TextStyle(color: colors.muted, fontSize: 12),
+                ),
+              ),
+              Text(
+                remaining <= 0 ? 'Cel osiągnięty' : 'Pozostało: $remaining',
+                style: TextStyle(
+                  color: remaining <= 0 ? colors.accent : colors.muted,
+                  fontSize: 11,
+                  fontWeight: remaining <= 0
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -467,9 +661,9 @@ class ExerciseTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 9),
       child: Material(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(appCardRadius),
         child: InkWell(
-          borderRadius: BorderRadius.circular(17),
+          borderRadius: BorderRadius.circular(appCardRadius),
           onTap: () => showExerciseDetails(context, title),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -548,7 +742,7 @@ class ProfileOption extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(appCardRadius),
         child: ListTile(
           leading: Icon(icon, color: colors.accent, size: 21),
           title: Text(
@@ -565,7 +759,7 @@ class ProfileOption extends StatelessWidget {
             size: 19,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(appCardRadius),
           ),
           onTap: onTap,
         ),
@@ -585,14 +779,14 @@ class NoteCard extends StatelessWidget {
     final colors = GymColors.of(context);
     return Material(
       color: colors.surface,
-      borderRadius: BorderRadius.circular(17),
+      borderRadius: BorderRadius.circular(appCardRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(appCardRadius),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(appCardRadius),
             border: Border.all(color: colors.muted.withValues(alpha: 0.25)),
           ),
           child: Row(

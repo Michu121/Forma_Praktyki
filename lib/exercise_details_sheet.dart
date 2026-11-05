@@ -107,7 +107,9 @@ class _ExerciseDetailsSheetState extends State<ExerciseDetailsSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              '${exercise.muscleGroup} • ${exercise.sets} serie • ${exercise.reps} powtórzeń',
+              '${exercise.muscleGroup} • ${exercise.equipment}\n'
+              '${exercise.places.join(' / ')} • ${exercise.sets} serie • '
+              '${exercise.reps} powtórzeń',
               style: TextStyle(color: colors.muted, fontSize: 12),
             ),
             const SizedBox(height: 19),
@@ -182,17 +184,18 @@ class _ExerciseDetailsSheetState extends State<ExerciseDetailsSheet> {
               ),
             ),
             const SizedBox(height: 11),
-            const _Instruction(
+            _Instruction(
               number: '01',
-              text: 'Połóż się na ławce i ustaw stopy stabilnie na podłodze.',
+              text:
+                  'Przygotuj sprzęt: ${exercise.equipment}. Zacznij w stabilnej pozycji.',
             ),
             const _Instruction(
               number: '02',
-              text: 'Chwyć sztangę nieco szerzej niż na szerokość barków.',
+              text: 'Wykonuj ruch płynnie i kontroluj jego pełny, wygodny zakres.',
             ),
             const _Instruction(
               number: '03',
-              text: 'Opuszczaj ciężar spokojnie do klatki, następnie wypchnij w górę.',
+              text: 'Oddychaj regularnie i unikaj gwałtownych szarpnięć.',
             ),
             const SizedBox(height: 14),
             Container(
@@ -211,7 +214,8 @@ class _ExerciseDetailsSheetState extends State<ExerciseDetailsSheet> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Wskazówka: utrzymuj łopatki ściągnięte i nie blokuj łokci.',
+                      'Wskazówka: dobierz wariant do swoich możliwości. '
+                      'Przerwij ćwiczenie, jeśli poczujesz ból.',
                       style: TextStyle(
                         color: colors.foreground,
                         fontSize: 11,

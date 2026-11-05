@@ -2,25 +2,38 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_settings.dart';
+import 'common_widgets.dart';
 import 'rest_duration_picker.dart';
+import 'workout_builder_sheet.dart';
+import 'workout_models.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     required this.settings,
     required this.settingsError,
+    required this.templates,
+    required this.defaultRestSeconds,
+    required this.onCreateTemplate,
     required this.onThemeChanged,
+    required this.onPaletteChanged,
     required this.onRestChanged,
     required this.onProfileNameChanged,
     required this.onProfileStatsChanged,
+    required this.onWorkoutReminderScheduleChanged,
     super.key,
   });
 
   final AppSettings settings;
   final String? settingsError;
+  final List<WorkoutPlan> templates;
+  final int defaultRestSeconds;
+  final ValueChanged<WorkoutPlan> onCreateTemplate;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<GymPalette> onPaletteChanged;
   final ValueChanged<int> onRestChanged;
   final ValueChanged<bool> onProfileNameChanged;
   final ValueChanged<bool> onProfileStatsChanged;
+  final ValueChanged<AppSettings> onWorkoutReminderScheduleChanged;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -28,17 +41,22 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late AppSettings _settings;
+  late List<WorkoutPlan> _templates;
 
   @override
   void initState() {
     super.initState();
     _settings = widget.settings;
+    _templates = List.of(widget.templates);
   }
 
   @override
   void didUpdateWidget(covariant SettingsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.settings != widget.settings) _settings = widget.settings;
+    if (oldWidget.templates != widget.templates) {
+      _templates = List.of(widget.templates);
+    }
   }
 
   @override
@@ -59,21 +77,132 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 12),
           ],
-          const _SettingsSectionTitle(
+          const AppSectionHeading(
             icon: Icons.tune_rounded,
             title: 'Ogólne',
             subtitle: 'Dopasuj wygląd i przebieg treningów.',
           ),
           const SizedBox(height: 10),
-          _SettingsCard(
+          AppSurfaceCard(
             child: Column(
               children: [
                 ListTile(
                   leading: Icon(Icons.palette_outlined, color: colors.accent),
                   title: const Text('Motyw aplikacji'),
-                  subtitle: Text(_themeName(_settings.themeMode)),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _chooseTheme(context),
+                  subtitle: Text(
+                    '${_themeName(_settings.themeMode)} • ${_settings.palette.label}',
+                  ),
+                ),
+                Divider(height: 1, color: colors.muted.withValues(alpha: 0.16)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Jasność',
+                        style: TextStyle(
+                          color: colors.foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment(
+                              value: ThemeMode.system,
+                              label: Text('System'),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              label: Text('Jasny'),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              label: Text('Ciemny'),
+                            ),
+                          ],
+                          selected: {_settings.themeMode},
+                          onSelectionChanged: (selection) {
+                            final mode = selection.first;
+                            setState(
+                              () => _settings = _settings.copyWith(
+                                themeMode: mode,
+                              ),
+                            );
+                            widget.onThemeChanged(mode);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        'Kolor akcentu',
+                        style: TextStyle(
+                          color: colors.foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          for (final palette in GymPalette.values)
+                            Tooltip(
+                              message: palette.label,
+                              child: Semantics(
+                                button: true,
+                                selected: _settings.palette == palette,
+                                label: 'Kolor ${palette.label}',
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () {
+                                    setState(
+                                      () => _settings = _settings.copyWith(
+                                        palette: palette,
+                                      ),
+                                    );
+                                    widget.onPaletteChanged(palette);
+                                  },
+                                  child: Container(
+                                    width: 42,
+                                    height: 42,
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: _settings.palette == palette
+                                            ? colors.foreground
+                                            : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: palette.accentFor(
+                                          Theme.of(context).brightness,
+                                        ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: _settings.palette == palette
+                                          ? Icon(
+                                              Icons.check_rounded,
+                                              size: 18,
+                                              color: colors.background,
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 Divider(height: 1, color: colors.muted.withValues(alpha: 0.16)),
                 RestDurationPicker(
@@ -92,13 +221,162 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 25),
-          const _SettingsSectionTitle(
-            icon: Icons.shield_outlined,
-            title: 'Prywatność',
-            subtitle: 'Wybierz, jakie informacje widzisz w swoim profilu.',
+          const AppSectionHeading(
+            icon: Icons.fitness_center_outlined,
+            title: 'Schematy treningowe',
+            subtitle:
+                'Twórz własne zestawy ćwiczeń i korzystaj z nich w planie.',
           ),
           const SizedBox(height: 10),
-          _SettingsCard(
+          AppSurfaceCard(
+            child: Column(
+              children: [
+                for (var index = 0; index < _templates.length; index++) ...[
+                  if (index > 0)
+                    Divider(
+                      height: 1,
+                      color: colors.muted.withValues(alpha: 0.16),
+                    ),
+                  ListTile(
+                    leading: Icon(
+                      _templates[index].type.icon,
+                      color: colors.accent,
+                    ),
+                    title: Text(_templates[index].name),
+                    subtitle: Text(
+                      '${_templates[index].exercises.length} ćwiczeń'
+                      ' • przerwa ${_templates[index].restSeconds} s',
+                    ),
+                  ),
+                ],
+                if (_templates.isNotEmpty)
+                  Divider(
+                    height: 1,
+                    color: colors.muted.withValues(alpha: 0.16),
+                  ),
+                ListTile(
+                  leading: Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: colors.accent,
+                  ),
+                  title: const Text('Utwórz nowy schemat'),
+                  subtitle: const Text('Wybierz ćwiczenia i nadaj mu nazwę.'),
+                  onTap: () => _createTemplate(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 25),
+          AppSectionHeading(
+            icon: Icons.notifications_active_outlined,
+            title: 'Przypomnienia o treningu',
+            subtitle: _settings.workoutRemindersEnabled
+                ? 'Wybierz dni tygodnia i godzinę powiadomień.'
+                : 'Włącz przypomnienia, aby ustawić harmonogram.',
+          ),
+          const SizedBox(height: 10),
+          AppSurfaceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile(
+                  secondary: Icon(
+                    Icons.notifications_outlined,
+                    color: colors.accent,
+                  ),
+                  title: const Text('Włącz przypomnienia'),
+                  subtitle: _settings.workoutRemindersEnabled
+                      ? Text(
+                          'Otrzymasz ${_settings.workoutReminderDays.length} '
+                          'powiadomień tygodniowo.',
+                        )
+                      : null,
+                  value: _settings.workoutRemindersEnabled,
+                  onChanged: (enabled) => _updateReminderSettings(
+                    _settings.copyWith(workoutRemindersEnabled: enabled),
+                  ),
+                ),
+                if (_settings.workoutRemindersEnabled)
+                  Divider(
+                    height: 1,
+                    color: colors.muted.withValues(alpha: 0.16),
+                  ),
+                if (_settings.workoutRemindersEnabled)
+                  ListTile(
+                    leading: Icon(Icons.schedule_rounded, color: colors.accent),
+                    title: const Text('Godzina przypomnienia'),
+                    subtitle: Text(
+                      _settings.workoutReminderTime.format(context),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: _chooseReminderTime,
+                  ),
+                if (_settings.workoutRemindersEnabled)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Dni tygodnia',
+                          style: TextStyle(
+                            color: colors.foreground,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 7,
+                          runSpacing: 4,
+                          children: [
+                            for (final day in _weekdays)
+                              FilterChip(
+                                label: Text(day.$2),
+                                selected: _settings.workoutReminderDays
+                                    .contains(day.$1),
+                                onSelected: (selected) {
+                                  final days = [
+                                    ..._settings.workoutReminderDays,
+                                  ];
+                                  if (selected) {
+                                    days.add(day.$1);
+                                  } else {
+                                    days.remove(day.$1);
+                                  }
+                                  if (days.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Wybierz przynajmniej jeden dzień.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  _updateReminderSettings(
+                                    _settings.copyWith(
+                                      workoutReminderDays: days,
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 25),
+          const AppSectionHeading(
+            icon: Icons.shield_outlined,
+            title: 'Prywatność',
+            subtitle:
+                'Sprawdź, jakie dane zapisuje aplikacja i jak nimi zarządzać.',
+          ),
+          const SizedBox(height: 10),
+          AppSurfaceCard(
             child: Column(
               children: [
                 SwitchListTile(
@@ -108,7 +386,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   title: const Text('Pokaż nazwę profilu'),
                   subtitle: const Text(
-                    'Gdy wyłączysz, nazwa zostanie ukryta na ekranie profilu.',
+                    'Ukryj nazwę na profilu i w codziennym powitaniu.',
                   ),
                   value: _settings.showProfileName,
                   onChanged: (value) {
@@ -128,7 +406,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   title: const Text('Pokaż statystyki profilu'),
                   subtitle: const Text(
-                    'Ukrywa liczbę treningów, czas i punkty na profilu.',
+                    'Ukryj liczbę treningów, czas i punkty na profilu.',
                   ),
                   value: _settings.showProfileStats,
                   onChanged: (value) {
@@ -143,16 +421,72 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          _PrivacyInfoCard(colors: colors),
+          const SizedBox(height: 8),
+          AppSurfaceCard(
+            child: _PrivacyArticle(
+              title: 'Jakie dane są używane?',
+              icon: Icons.dataset_outlined,
+              content:
+                  'Aplikacja korzysta z ustawień, schematów treningowych, '
+                  'zaplanowanych treningów oraz notatek, które zapisujesz. '
+                  'Nie wymaga rejestracji konta.',
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppSurfaceCard(
+            child: _PrivacyArticle(
+              title: 'Gdzie są przechowywane?',
+              icon: Icons.phone_android_rounded,
+              content:
+                  'Ustawienia, schematy, kalendarz i notatki są zapisywane '
+                  'lokalnie na tym urządzeniu. Aplikacja nie synchronizuje '
+                  'ich z kontem internetowym. Historia ukończonych treningów '
+                  'jest obecnie dostępna tylko w bieżącej sesji aplikacji.',
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppSurfaceCard(
+            child: _PrivacyArticle(
+              title: 'Co zmieniają ustawienia profilu?',
+              icon: Icons.visibility_outlined,
+              content:
+                  'Wyłączenie nazwy lub statystyk ukrywa je w widoku profilu '
+                  '(nazwa również w powitaniu). Nie usuwa zapisanych '
+                  'schematów, notatek ani ustawień.',
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppSurfaceCard(
+            child: _PrivacyArticle(
+              title: 'Powiadomienia i uprawnienia',
+              icon: Icons.notifications_none_rounded,
+              content:
+                  'Przypomnienia o treningu są planowane na urządzeniu. '
+                  'System może poprosić o zgodę na powiadomienia i alarmy. '
+                  'Uprawnieniami możesz zarządzać również w ustawieniach '
+                  'systemowych telefonu.',
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppSurfaceCard(
+            child: _PrivacyArticle(
+              title: 'Jak usunąć dane?',
+              icon: Icons.delete_outline_rounded,
+              content:
+                  'Aplikacja nie ma jeszcze przycisku usuwania wszystkich '
+                  'danych. Lokalne dane aplikacji możesz usunąć w ustawieniach '
+                  'systemowych telefonu, czyszcząc jej pamięć lub '
+                  'odinstalowując aplikację.',
+            ),
+          ),
           const SizedBox(height: 25),
-          const _SettingsSectionTitle(
+          const AppSectionHeading(
             icon: Icons.info_outline_rounded,
             title: 'Informacje',
             subtitle: 'Przejrzyste zasady działania aplikacji.',
           ),
           const SizedBox(height: 10),
-          _SettingsCard(
+          AppSurfaceCard(
             child: ListTile(
               leading: Icon(Icons.storage_outlined, color: colors.accent),
               title: const Text('Dane i przechowywanie'),
@@ -167,67 +501,39 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _chooseTheme(BuildContext context) async {
-    final colors = GymColors.of(context);
-    await showModalBottomSheet<void>(
+  static const _weekdays = [
+    (DateTime.monday, 'Pon'),
+    (DateTime.tuesday, 'Wt'),
+    (DateTime.wednesday, 'Śr'),
+    (DateTime.thursday, 'Czw'),
+    (DateTime.friday, 'Pt'),
+    (DateTime.saturday, 'Sob'),
+    (DateTime.sunday, 'Niedz'),
+  ];
+
+  void _updateReminderSettings(AppSettings settings) {
+    setState(() => _settings = settings);
+    widget.onWorkoutReminderScheduleChanged(settings);
+  }
+
+  Future<void> _chooseReminderTime() async {
+    final time = await showTimePicker(
       context: context,
-      backgroundColor: colors.surface,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Text(
-                  'Motyw aplikacji',
-                  style: TextStyle(
-                    color: colors.foreground,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              RadioGroup<ThemeMode>(
-                groupValue: _settings.themeMode,
-                onChanged: (mode) {
-                  if (mode == null) return;
-                  setState(
-                    () => _settings = _settings.copyWith(themeMode: mode),
-                  );
-                  widget.onThemeChanged(mode);
-                  Navigator.pop(sheetContext);
-                },
-                child: Column(
-                  children: [
-                    for (final option in [
-                      (
-                        ThemeMode.system,
-                        'Systemowy',
-                        Icons.settings_brightness_rounded,
-                      ),
-                      (ThemeMode.light, 'Jasny', Icons.light_mode_rounded),
-                      (ThemeMode.dark, 'Ciemny', Icons.dark_mode_rounded),
-                    ])
-                      RadioListTile<ThemeMode>(
-                        value: option.$1,
-                        title: Text(option.$2),
-                        secondary: Icon(option.$3, color: colors.accent),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      initialTime: _settings.workoutReminderTime,
+      helpText: 'Godzina przypomnienia',
     );
+    if (time == null || !mounted) return;
+    _updateReminderSettings(_settings.copyWith(workoutReminderTime: time));
+  }
+
+  Future<void> _createTemplate(BuildContext context) async {
+    final template = await showWorkoutBuilder(
+      context,
+      defaultRestSeconds: widget.defaultRestSeconds,
+    );
+    if (template == null || !mounted) return;
+    setState(() => _templates = [..._templates, template]);
+    widget.onCreateTemplate(template);
   }
 
   void _showStorageInfo(BuildContext context) {
@@ -236,9 +542,11 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Twoje dane'),
         content: const Text(
-          'Aplikacja nie wysyła ustawień profilu do żadnego serwera. '
-          'Preferencje są przechowywane lokalnie na urządzeniu. '
-          'Treningi i notatki pozostają w pamięci bieżącej sesji.',
+          'Ustawienia, schematy, zaplanowane treningi i notatki są zapisywane '
+          'lokalnie na tym urządzeniu. Aplikacja nie wymaga konta online ani '
+          'nie synchronizuje tych danych. Historia ukończonych treningów jest '
+          'dostępna tylko w bieżącej sesji. Aby usunąć zapisane dane, wyczyść '
+          'pamięć aplikacji lub odinstaluj ją w ustawieniach telefonu.',
         ),
         actions: [
           TextButton(
@@ -257,98 +565,40 @@ class _SettingsPageState extends State<SettingsPage> {
   };
 }
 
-class _SettingsSectionTitle extends StatelessWidget {
-  const _SettingsSectionTitle({
-    required this.icon,
+class _PrivacyArticle extends StatelessWidget {
+  const _PrivacyArticle({
     required this.title,
-    required this.subtitle,
+    required this.icon,
+    required this.content,
   });
 
-  final IconData icon;
   final String title;
-  final String subtitle;
+  final IconData icon;
+  final String content;
 
   @override
   Widget build(BuildContext context) {
     final colors = GymColors.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ExpansionTile(
+      leading: Icon(icon, color: colors.accent),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: colors.foreground,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      expandedCrossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: colors.accent),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: colors.foreground,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                style: TextStyle(color: colors.muted, fontSize: 11),
-              ),
-            ],
-          ),
+        Text(
+          content,
+          style: TextStyle(color: colors.muted, fontSize: 13, height: 1.5),
         ),
       ],
     );
   }
-}
-
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: GymColors.of(context).surface,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: child,
-    );
-  }
-}
-
-class _PrivacyInfoCard extends StatelessWidget {
-  const _PrivacyInfoCard({required this.colors});
-
-  final GymColors colors;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: colors.accent.withValues(alpha: 0.09),
-      borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: colors.accent.withValues(alpha: 0.2)),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.lock_outline_rounded, color: colors.accent, size: 19),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'Profil jest prywatny i widoczny tylko w tej aplikacji. '
-            'Nie ma tu konta online ani udostępniania danych innym osobom.',
-            style: TextStyle(
-              color: colors.foreground,
-              fontSize: 11,
-              height: 1.45,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class _SettingsErrorBanner extends StatelessWidget {
@@ -362,7 +612,7 @@ class _SettingsErrorBanner extends StatelessWidget {
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(appCompactRadius),
     ),
     child: Row(
       children: [

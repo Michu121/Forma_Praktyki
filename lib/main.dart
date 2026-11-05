@@ -9,15 +9,20 @@ import 'dashboard_page.dart';
 import 'date_helpers.dart';
 import 'plan_page.dart';
 import 'profile_page.dart';
+import 'rest_notification_service.dart';
 import 'workout_data_store.dart';
 import 'workout_models.dart';
+import 'welcome_message.dart';
 
 void main() {
   runApp(const GymApp());
 }
 
 class GymApp extends StatefulWidget {
-  const GymApp({super.key});
+  const GymApp({this.restNotifications, this.workoutReminders, super.key});
+
+  final RestNotificationController? restNotifications;
+  final WorkoutReminderController? workoutReminders;
 
   @override
   State<GymApp> createState() => _GymAppState();
@@ -66,10 +71,41 @@ class _GymAppState extends State<GymApp> {
     }
   }
 
+  Future<void> _updateWorkoutReminderSettings(AppSettings requested) async {
+    try {
+      final settings = await _settings.withWorkoutReminders(
+        enabled: requested.workoutRemindersEnabled,
+        days: requested.workoutReminderDays,
+        time: requested.workoutReminderTime,
+      );
+      if (mounted) setState(() => _settings = settings);
+
+      final reminderController =
+          widget.workoutReminders ?? RestNotificationService.instance;
+      final warning = await reminderController.updateWorkoutReminders(
+        enabled: settings.workoutRemindersEnabled,
+        days: settings.workoutReminderDays,
+        hour: settings.workoutReminderTime.hour,
+        minute: settings.workoutReminderTime.minute,
+      );
+      if (warning != null && mounted) {
+        _messengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text(warning)),
+        );
+      }
+    } on Exception catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _settingsError = 'Nie udało się ustawić przypomnień: $error',
+      );
+      _messengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('Nie udało się ustawić przypomnień.')),
+      );
+    }
+  }
+
   ThemeData _theme(Brightness brightness) {
-    final palette = brightness == Brightness.dark
-        ? GymColors.dark
-        : GymColors.light;
+    final palette = GymColors.forPalette(_settings.palette, brightness);
     return ThemeData(
       brightness: brightness,
       scaffoldBackgroundColor: palette.background,
@@ -83,6 +119,53 @@ class _GymAppState extends State<GymApp> {
         onError: Colors.white,
         surface: palette.surface,
         onSurface: palette.foreground,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: palette.background,
+        foregroundColor: palette.foreground,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+      ),
+      cardTheme: CardThemeData(
+        color: palette.surface,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(appCardRadius),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(appCardRadius),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: palette.surface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(appCompactRadius),
+          borderSide: BorderSide(color: palette.muted.withValues(alpha: 0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(appCompactRadius),
+          borderSide: BorderSide(color: palette.muted.withValues(alpha: 0.3)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(appCompactRadius),
+          borderSide: BorderSide(color: palette.accent, width: 1.5),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: palette.surfaceLight,
+        contentTextStyle: TextStyle(color: palette.foreground),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(appCompactRadius),
+        ),
       ),
       extensions: [palette],
       fontFamily: 'Roboto',
@@ -99,37 +182,52 @@ class _GymAppState extends State<GymApp> {
     darkTheme: _theme(Brightness.dark),
     themeMode: _settings.themeMode,
     home: GymHomePage(
+      restNotifications:
+          widget.restNotifications ?? RestNotificationService.instance,
       settings: _settings,
       settingsError: _settingsError,
       onThemeChanged: (mode) =>
           _updateSettings((value) => value.withTheme(mode)),
+      onPaletteChanged: (palette) =>
+          _updateSettings((value) => value.withPalette(palette)),
       onRestChanged: (seconds) =>
           _updateSettings((value) => value.withDefaultRest(seconds)),
       onProfileNameChanged: (visible) =>
           _updateSettings((value) => value.withProfileName(visible)),
       onProfileStatsChanged: (visible) =>
           _updateSettings((value) => value.withProfileStats(visible)),
+      onWorkoutReminderScheduleChanged: _updateWorkoutReminderSettings,
+      onWeeklyWorkoutGoalChanged: (goal) =>
+          _updateSettings((value) => value.withWeeklyWorkoutGoal(goal)),
     ),
   );
 }
 
 class GymHomePage extends StatefulWidget {
   const GymHomePage({
+    required this.restNotifications,
     required this.settings,
     required this.settingsError,
     required this.onThemeChanged,
+    required this.onPaletteChanged,
     required this.onRestChanged,
     required this.onProfileNameChanged,
     required this.onProfileStatsChanged,
+    required this.onWorkoutReminderScheduleChanged,
+    required this.onWeeklyWorkoutGoalChanged,
     super.key,
   });
 
+  final RestNotificationController restNotifications;
   final AppSettings settings;
   final String? settingsError;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<GymPalette> onPaletteChanged;
   final ValueChanged<int> onRestChanged;
   final ValueChanged<bool> onProfileNameChanged;
   final ValueChanged<bool> onProfileStatsChanged;
+  final ValueChanged<AppSettings> onWorkoutReminderScheduleChanged;
+  final ValueChanged<int> onWeeklyWorkoutGoalChanged;
 
   @override
   State<GymHomePage> createState() => _GymHomePageState();
@@ -271,24 +369,24 @@ class _GymHomePageState extends State<GymHomePage> {
         nextWorkoutDate: nextWorkout?.key,
         points: _points,
         completedWorkouts: _completedWorkouts,
+        weeklyWorkoutGoal: widget.settings.weeklyWorkoutGoal,
+        userId: defaultProfileId,
+        userName: widget.settings.showProfileName ? defaultProfileName : null,
         workout: _planForDate(today),
         isTodayCompleted: _completedWorkouts.contains(today),
         onCompleteWorkout: () => _completeWorkout(today),
         onOpenPlan: () => setState(() => _selectedTab = 1),
         onOpenCalendar: () => setState(() => _selectedTab = 2),
-        onCreateTemplate: _createTemplate,
         defaultRestSeconds: widget.settings.defaultRestSeconds,
+        restNotifications: widget.restNotifications,
       ),
       PlanPage(
         date: today,
         workout: _planForDate(today),
         note: _dayNotes[today] ?? '',
         templates: _templates,
-        onCreateTemplate: _createTemplate,
         onSaveWorkoutNote: (note) => _saveWorkoutNote(today, note),
-        isTodayCompleted: _completedWorkouts.contains(today),
         onSaveNote: (note) => _saveDayNote(today, note),
-        onCompleteWorkout: () => _completeWorkout(today),
       ),
       CalendarPage(
         selectedDate: _selectedDate,
@@ -298,11 +396,10 @@ class _GymHomePageState extends State<GymHomePage> {
         dayNote: _dayNotes[dateOnly(_selectedDate)] ?? '',
         onSelectDate: (date) => setState(() => _selectedDate = dateOnly(date)),
         onSaveWorkout: _saveWorkout,
-        onCreateTemplate: _createTemplate,
         onSaveDayNote: _saveDayNote,
         onSaveWorkoutNote: _saveWorkoutNote,
         onCompleteWorkout: _completeWorkout,
-        defaultRestSeconds: widget.settings.defaultRestSeconds,
+        restNotifications: widget.restNotifications,
       ),
       ProfilePage(
         points: _points,
@@ -310,10 +407,17 @@ class _GymHomePageState extends State<GymHomePage> {
         note: _dayNotes[today] ?? '',
         settings: widget.settings,
         settingsError: widget.settingsError,
+        templates: _templates,
+        defaultRestSeconds: widget.settings.defaultRestSeconds,
+        onCreateTemplate: _createTemplate,
         onThemeChanged: widget.onThemeChanged,
+        onPaletteChanged: widget.onPaletteChanged,
         onRestChanged: widget.onRestChanged,
         onProfileNameChanged: widget.onProfileNameChanged,
         onProfileStatsChanged: widget.onProfileStatsChanged,
+        onWorkoutReminderScheduleChanged:
+            widget.onWorkoutReminderScheduleChanged,
+        onWeeklyWorkoutGoalChanged: widget.onWeeklyWorkoutGoalChanged,
         onSaveNote: (note) => _saveDayNote(today, note),
       ),
     ];

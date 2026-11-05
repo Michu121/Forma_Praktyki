@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'common_widgets.dart';
 import 'date_helpers.dart';
+import 'rest_notification_service.dart';
 import 'training_session_sheet.dart';
-import 'workout_builder_sheet.dart';
+import 'welcome_message.dart';
 import 'workout_models.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -14,13 +15,16 @@ class DashboardPage extends StatelessWidget {
     required this.nextWorkoutDate,
     required this.points,
     required this.completedWorkouts,
+    required this.weeklyWorkoutGoal,
+    required this.userId,
+    required this.userName,
     required this.workout,
     required this.isTodayCompleted,
     required this.onCompleteWorkout,
     required this.onOpenPlan,
     required this.onOpenCalendar,
-    required this.onCreateTemplate,
     required this.defaultRestSeconds,
+    required this.restNotifications,
     super.key,
   });
 
@@ -29,13 +33,16 @@ class DashboardPage extends StatelessWidget {
   final DateTime? nextWorkoutDate;
   final int points;
   final Set<DateTime> completedWorkouts;
+  final int weeklyWorkoutGoal;
+  final String userId;
+  final String? userName;
   final WorkoutPlan workout;
   final bool isTodayCompleted;
   final VoidCallback onCompleteWorkout;
   final VoidCallback onOpenPlan;
   final VoidCallback onOpenCalendar;
-  final ValueChanged<WorkoutPlan> onCreateTemplate;
   final int defaultRestSeconds;
+  final RestNotificationController restNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -43,28 +50,34 @@ class DashboardPage extends StatelessWidget {
     return AppPage(
       children: [
         const AppHeader(showAvatar: true),
-        const SizedBox(height: 27),
+        const SizedBox(height: 22),
         Text(
           dashboardDateLabel(today),
           style: TextStyle(
             color: colors.muted,
-            fontSize: 11,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w700,
+            fontSize: 12,
+            letterSpacing: 0.8,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 7),
-        Text(
-          'Gotowy na\nmocny trening?',
-          style: TextStyle(
-            color: colors.foreground,
-            fontSize: 31,
-            height: 1.12,
-            fontWeight: FontWeight.w800,
+        KeyedSubtree(
+          key: const Key('daily_welcome_message'),
+          child: AppPageTitle(
+            dailyWelcomeMessage(
+              userId: userId,
+              date: today,
+              userName: userName,
+            ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 17),
         RankCard(points: points),
+        const SizedBox(height: 14),
+        WeeklyWorkoutGoalCard(
+          completed: workoutsCompletedThisWeek(completedWorkouts, today),
+          goal: weeklyWorkoutGoal,
+        ),
         const SizedBox(height: 25),
         SectionTitle(
           'Twój dzisiejszy plan',
@@ -76,22 +89,6 @@ class DashboardPage extends StatelessWidget {
           completed: isTodayCompleted,
           onStart: () => _startWorkout(context),
           onOpenPlan: onOpenPlan,
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final plan = await showWorkoutBuilder(
-              context,
-              defaultRestSeconds: defaultRestSeconds,
-            );
-            if (plan != null) onCreateTemplate(plan);
-          },
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Utwórz schemat'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: GymColors.of(context).accent,
-            minimumSize: const Size.fromHeight(44),
-          ),
         ),
         const SizedBox(height: 25),
         SectionTitle(
@@ -120,6 +117,7 @@ class DashboardPage extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => TrainingSessionSheet(
         workout: workout,
+        restNotifications: restNotifications,
         onComplete: () {
           Navigator.of(sheetContext).pop();
           onCompleteWorkout();
@@ -145,9 +143,9 @@ class _NextWorkoutCard extends StatelessWidget {
     final colors = GymColors.of(context);
     return Material(
       color: colors.surface,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(appCardRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(appCardRadius),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(15),

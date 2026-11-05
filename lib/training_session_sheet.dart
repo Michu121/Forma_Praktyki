@@ -5,17 +5,20 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'date_helpers.dart';
 import 'exercise_details_sheet.dart';
+import 'rest_notification_service.dart';
 import 'workout_models.dart';
 
 class TrainingSessionSheet extends StatefulWidget {
   const TrainingSessionSheet({
     required this.workout,
     required this.onComplete,
+    required this.restNotifications,
     super.key,
   });
 
   final WorkoutPlan workout;
   final VoidCallback onComplete;
+  final RestNotificationController restNotifications;
 
   @override
   State<TrainingSessionSheet> createState() => _TrainingSessionSheetState();
@@ -26,6 +29,8 @@ class _TrainingSessionSheetState extends State<TrainingSessionSheet> {
   Timer? _timer;
   int _exerciseIndex = 0;
   int _remainingSeconds = 0;
+  DateTime? _restEndsAt;
+  Future<void>? _restNotificationStart;
   bool _isResting = false;
   bool _isFinished = false;
 
@@ -208,7 +213,7 @@ class _TrainingSessionSheetState extends State<TrainingSessionSheet> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _advanceAfterRest,
+                      onPressed: _skipRest,
                       icon: const Icon(Icons.skip_next_rounded),
                       label: const Text('Pomiń przerwę'),
                       style: OutlinedButton.styleFrom(
@@ -295,32 +300,39 @@ class _TrainingSessionSheetState extends State<TrainingSessionSheet> {
   }
 
   void _recordSet() {
+    final restDuration = Duration(seconds: widget.workout.restSeconds);
     setState(() {
       _completedSets[_exercise.name] = _setsForExercise + 1;
       _isResting = true;
       _remainingSeconds = widget.workout.restSeconds;
+      _restEndsAt = DateTime.now().add(restDuration);
     });
+    _restNotificationStart = _startRestNotification(restDuration);
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      if (_remainingSeconds <= 1) {
+      final remaining = _restEndsAt?.difference(DateTime.now()).inSeconds ?? 0;
+      if (remaining <= 0) {
         timer.cancel();
-        _advanceAfterRest();
+        _advanceAfterRest(restFinished: true);
       } else {
-        setState(() => _remainingSeconds--);
+        setState(() => _remainingSeconds = remaining);
       }
     });
   }
 
-  void _advanceAfterRest() {
+  void _skipRest() => _advanceAfterRest(restFinished: false);
+
+  void _advanceAfterRest({required bool restFinished}) {
     _timer?.cancel();
     if (!mounted) return;
     setState(() {
       _isResting = false;
       _remainingSeconds = 0;
+      _restEndsAt = null;
       if (_setsForExercise >= _exercise.sets) {
         if (_exerciseIndex + 1 >= widget.workout.exercises.length) {
           _isFinished = true;
@@ -329,6 +341,42 @@ class _TrainingSessionSheetState extends State<TrainingSessionSheet> {
         }
       }
     });
+    unawaited(_updateRestNotification(restFinished: restFinished));
+  }
+
+  Future<void> _startRestNotification(Duration duration) async {
+    try {
+      final warning = await widget.restNotifications.startRest(duration);
+      if (warning != null && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(warning)));
+      }
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Nie udało się uruchomić powiadomienia: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _updateRestNotification({required bool restFinished}) async {
+    await _restNotificationStart;
+    try {
+      if (restFinished) {
+        await widget.restNotifications.finishRest();
+      } else {
+        await widget.restNotifications.cancelRest();
+      }
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Nie udało się zaktualizować powiadomienia: $error'),
+        ),
+      );
+    }
   }
 
   String _formatTime(int seconds) =>

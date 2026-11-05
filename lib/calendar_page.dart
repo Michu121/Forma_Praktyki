@@ -4,8 +4,8 @@ import 'app_colors.dart';
 import 'common_widgets.dart';
 import 'date_helpers.dart';
 import 'note_editor.dart';
+import 'rest_notification_service.dart';
 import 'training_session_sheet.dart';
-import 'workout_builder_sheet.dart';
 import 'workout_models.dart';
 
 class CalendarPage extends StatefulWidget {
@@ -17,11 +17,10 @@ class CalendarPage extends StatefulWidget {
     required this.dayNote,
     required this.onSelectDate,
     required this.onSaveWorkout,
-    required this.onCreateTemplate,
     required this.onSaveDayNote,
     required this.onSaveWorkoutNote,
     required this.onCompleteWorkout,
-    required this.defaultRestSeconds,
+    required this.restNotifications,
     super.key,
   });
 
@@ -32,11 +31,10 @@ class CalendarPage extends StatefulWidget {
   final String dayNote;
   final ValueChanged<DateTime> onSelectDate;
   final void Function(DateTime date, WorkoutPlan plan) onSaveWorkout;
-  final ValueChanged<WorkoutPlan> onCreateTemplate;
   final void Function(DateTime date, String note) onSaveDayNote;
   final void Function(DateTime date, String note) onSaveWorkoutNote;
   final ValueChanged<DateTime> onCompleteWorkout;
-  final int defaultRestSeconds;
+  final RestNotificationController restNotifications;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -66,14 +64,7 @@ class _CalendarPageState extends State<CalendarPage> {
       children: [
         const AppHeader(),
         const SizedBox(height: 27),
-        Text(
-          'Kalendarz',
-          style: TextStyle(
-            color: colors.foreground,
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        const AppPageTitle('Kalendarz'),
         const SizedBox(height: 6),
         Text('Twój rytm, Twoje tempo.', style: TextStyle(color: colors.muted)),
         const SizedBox(height: 22),
@@ -116,8 +107,6 @@ class _CalendarPageState extends State<CalendarPage> {
         const SectionTitle('Oznaczenia'),
         const SizedBox(height: 10),
         const _CalendarLegend(),
-        const SizedBox(height: 20),
-        WeeklyActivityChart(completedWorkouts: widget.completedWorkouts),
       ],
     );
   }
@@ -256,11 +245,6 @@ class _CalendarPageState extends State<CalendarPage> {
                 subtitle: Text('${template.exercises.length} ćwiczeń'),
                 onTap: () => Navigator.pop(sheetContext, template),
               ),
-            ListTile(
-              leading: const Icon(Icons.add_circle_outline_rounded),
-              title: const Text('Utwórz nowy schemat'),
-              onTap: () => Navigator.pop(sheetContext, true),
-            ),
           ],
         ),
       ),
@@ -268,16 +252,6 @@ class _CalendarPageState extends State<CalendarPage> {
     if (!context.mounted) return;
     if (selected is WorkoutPlan) {
       widget.onSaveWorkout(date, selected);
-    } else if (selected == true) {
-      final plan = await showWorkoutBuilder(
-        context,
-        defaultRestSeconds: widget.defaultRestSeconds,
-      );
-      if (!mounted) return;
-      if (plan != null) {
-        widget.onCreateTemplate(plan);
-        widget.onSaveWorkout(date, plan);
-      }
     }
   }
 
@@ -302,6 +276,7 @@ class _CalendarPageState extends State<CalendarPage> {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => TrainingSessionSheet(
         workout: workout,
+        restNotifications: widget.restNotifications,
         onComplete: () {
           Navigator.of(sheetContext).pop();
           widget.onCompleteWorkout(date);
@@ -419,7 +394,7 @@ class _EmptyWorkoutCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Wybierz zapisany schemat lub utwórz nowy.',
+                  'Wybierz zapisany schemat treningu.',
                   style: TextStyle(color: colors.muted, fontSize: 12),
                 ),
               ),

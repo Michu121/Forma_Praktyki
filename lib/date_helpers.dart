@@ -59,6 +59,18 @@ String dashboardDateLabel(DateTime date) =>
 String shortDateLabel(DateTime date) =>
     '${date.day} ${polishMonths[date.month - 1]}';
 
+int workoutsCompletedThisWeek(Set<DateTime> completedWorkouts, DateTime date) {
+  final today = dateOnly(date);
+  final monday = today.subtract(Duration(days: today.weekday - 1));
+  final nextMonday = monday.add(const Duration(days: 7));
+  return completedWorkouts
+      .map(dateOnly)
+      .where((completed) => !completed.isBefore(monday))
+      .where((completed) => completed.isBefore(nextMonday))
+      .toSet()
+      .length;
+}
+
 String rankName(int points) {
   if (points >= 1600) return 'Mistrz';
   if (points >= 800) return 'Atleta';
