@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
@@ -6,8 +8,9 @@ import 'bmi_calculator_page.dart';
 import 'common_widgets.dart';
 import 'date_helpers.dart';
 import 'note_editor.dart';
+import 'profile_editor_page.dart';
 import 'settings_page.dart';
-import 'welcome_message.dart';
+import 'user_profile.dart';
 import 'workout_models.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -15,6 +18,8 @@ class ProfilePage extends StatelessWidget {
     required this.points,
     required this.completedWorkouts,
     required this.note,
+    required this.profile,
+    required this.waterIntakeMl,
     required this.settings,
     required this.settingsError,
     required this.templates,
@@ -28,12 +33,16 @@ class ProfilePage extends StatelessWidget {
     required this.onWorkoutReminderScheduleChanged,
     required this.onWeeklyWorkoutGoalChanged,
     required this.onSaveNote,
+    required this.onSaveProfile,
+    required this.onWaterIntakeChanged,
     super.key,
   });
 
   final int points;
   final Set<DateTime> completedWorkouts;
   final String note;
+  final UserProfile profile;
+  final int waterIntakeMl;
   final AppSettings settings;
   final String? settingsError;
   final List<WorkoutPlan> templates;
@@ -47,6 +56,8 @@ class ProfilePage extends StatelessWidget {
   final ValueChanged<AppSettings> onWorkoutReminderScheduleChanged;
   final ValueChanged<int> onWeeklyWorkoutGoalChanged;
   final ValueChanged<String> onSaveNote;
+  final Future<void> Function(UserProfile profile) onSaveProfile;
+  final Future<void> Function(int amountMl) onWaterIntakeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -59,27 +70,37 @@ class ProfilePage extends StatelessWidget {
         Center(
           child: Column(
             children: [
-              Container(
-                width: 86,
-                height: 86,
-                decoration: BoxDecoration(
-                  color: colors.accent.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: colors.accent.withValues(alpha: 0.4),
-                    width: 1.5,
-                  ),
-                ),
-                child: Icon(
-                  Icons.person_rounded,
-                  size: 44,
-                  color: colors.accent,
-                ),
+              CircleAvatar(
+                radius: 44,
+                backgroundColor: colors.accent.withValues(alpha: 0.15),
+                foregroundImage: profile.avatarPath == null
+                    ? null
+                    : FileImage(File(profile.avatarPath!)),
+                child: profile.avatarPath == null
+                    ? Icon(Icons.person_rounded, size: 44, color: colors.accent)
+                    : null,
               ),
+              if (settings.showProfileStats &&
+                  (profile.ageAt(DateTime.now()) != null ||
+                      profile.heightCm != null ||
+                      profile.weightKg != null)) ...[
+                const SizedBox(height: 7),
+                Text(
+                  [
+                    if (profile.ageAt(DateTime.now()) case final age?)
+                      '$age lat',
+                    if (profile.heightCm case final height?)
+                      '${height.toStringAsFixed(0)} cm',
+                    if (profile.weightKg case final weight?)
+                      '${weight.toStringAsFixed(1)} kg',
+                  ].join(' • '),
+                  style: TextStyle(color: colors.muted, fontSize: 12),
+                ),
+              ],
               const SizedBox(height: 14),
               if (settings.showProfileName)
                 Text(
-                  defaultProfileName,
+                  profile.displayName,
                   style: TextStyle(
                     color: colors.foreground,
                     fontSize: 22,
@@ -114,6 +135,14 @@ class ProfilePage extends StatelessWidget {
             ],
           ),
         const SizedBox(height: 25),
+        const SectionTitle('Nawodnienie'),
+        const SizedBox(height: 12),
+        _WaterIntakeCard(
+          amountMl: waterIntakeMl,
+          targetMl: profile.dailyWaterTargetMl,
+          onAddAmount: (amount) => onWaterIntakeChanged(waterIntakeMl + amount),
+        ),
+        const SizedBox(height: 25),
         const SectionTitle('Twój notes'),
         const SizedBox(height: 12),
         NoteCard(
@@ -126,6 +155,12 @@ class ProfilePage extends StatelessWidget {
         const SizedBox(height: 25),
         const SectionTitle('Twoje konto'),
         const SizedBox(height: 12),
+        ProfileOption(
+          icon: Icons.manage_accounts_outlined,
+          title: 'Edytuj profil',
+          subtitle: 'Imię, nazwisko, pseudonim, zdjęcie i dane ciała',
+          onTap: () => _editProfile(context),
+        ),
         ProfileOption(
           icon: Icons.edit_note_rounded,
           title: 'Notatki treningowe',
@@ -165,7 +200,8 @@ class ProfilePage extends StatelessWidget {
           title: 'Cele treningowe',
           subtitle:
               '${workoutsCompletedThisWeek(completedWorkouts, DateTime.now())}'
-              ' z ${settings.weeklyWorkoutGoal} treningów w tym tygodniu',
+              ' z ${settings.weeklyWorkoutGoal} treningów w tym tygodniu'
+              ' • porównanie po zebraniu danych',
           onTap: () => _editWeeklyWorkoutGoal(context),
         ),
         ProfileOption(
@@ -179,6 +215,15 @@ class ProfilePage extends StatelessWidget {
         const SizedBox(height: 18),
       ],
     );
+  }
+
+  Future<void> _editProfile(BuildContext context) async {
+    final updatedProfile = await Navigator.of(context).push<UserProfile>(
+      MaterialPageRoute<UserProfile>(
+        builder: (_) => ProfileEditorPage(profile: profile),
+      ),
+    );
+    if (updatedProfile != null) await onSaveProfile(updatedProfile);
   }
 
   Future<void> _editWeeklyWorkoutGoal(BuildContext context) async {
@@ -261,6 +306,12 @@ class _WeeklyWorkoutGoalDialogState extends State<_WeeklyWorkoutGoalDialog> {
             style: TextStyle(color: colors.muted, fontSize: 12),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Porównanie z innymi użytkownikami pojawi się po zebraniu '
+            'wystarczającej liczby zagregowanych celów tygodniowych.',
+            style: TextStyle(color: colors.muted, fontSize: 11, height: 1.4),
+          ),
         ],
       ),
       actions: [
@@ -275,6 +326,82 @@ class _WeeklyWorkoutGoalDialogState extends State<_WeeklyWorkoutGoalDialog> {
       ],
     );
   }
+}
+
+class _WaterIntakeCard extends StatelessWidget {
+  const _WaterIntakeCard({
+    required this.amountMl,
+    required this.targetMl,
+    required this.onAddAmount,
+  });
+
+  final int amountMl;
+  final int targetMl;
+  final ValueChanged<int> onAddAmount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = GymColors.of(context);
+    final progress = (amountMl / targetMl).clamp(0.0, 1.0);
+    return AppSurfaceCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.water_drop_outlined, color: colors.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Wypite napoje: ${_litersLabel(amountMl)} / ${_litersLabel(targetMl)}',
+                    style: TextStyle(
+                      color: colors.foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(8),
+              backgroundColor: colors.surfaceLight,
+              color: colors.accent,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Dzisiejsze wpisy dotyczą napojów; cel orientacyjny EFSA '
+              'obejmuje też wodę z żywności.',
+              style: TextStyle(color: colors.muted, fontSize: 11, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => onAddAmount(250),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('250 ml'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => onAddAmount(500),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('500 ml'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _litersLabel(int amountMl) =>
+      '${(amountMl / 1000).toStringAsFixed(1)} l';
 }
 
 class _ProfileStat extends StatelessWidget {

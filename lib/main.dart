@@ -7,9 +7,14 @@ import 'app_settings.dart';
 import 'calendar_page.dart';
 import 'dashboard_page.dart';
 import 'date_helpers.dart';
+import 'hydration_data_store.dart';
+import 'notes_page.dart';
 import 'plan_page.dart';
+import 'personal_note.dart';
+import 'profile_data_store.dart';
 import 'profile_page.dart';
 import 'rest_notification_service.dart';
+import 'user_profile.dart';
 import 'workout_data_store.dart';
 import 'workout_models.dart';
 import 'welcome_message.dart';
@@ -19,10 +24,18 @@ void main() {
 }
 
 class GymApp extends StatefulWidget {
-  const GymApp({this.restNotifications, this.workoutReminders, super.key});
+  const GymApp({
+    this.restNotifications,
+    this.workoutReminders,
+    this.noteReminders,
+    this.hydrationReminders,
+    super.key,
+  });
 
   final RestNotificationController? restNotifications;
   final WorkoutReminderController? workoutReminders;
+  final NoteReminderController? noteReminders;
+  final HydrationReminderController? hydrationReminders;
 
   @override
   State<GymApp> createState() => _GymAppState();
@@ -184,6 +197,9 @@ class _GymAppState extends State<GymApp> {
     home: GymHomePage(
       restNotifications:
           widget.restNotifications ?? RestNotificationService.instance,
+      noteReminders: widget.noteReminders ?? RestNotificationService.instance,
+      hydrationReminders:
+          widget.hydrationReminders ?? RestNotificationService.instance,
       settings: _settings,
       settingsError: _settingsError,
       onThemeChanged: (mode) =>
@@ -206,6 +222,8 @@ class _GymAppState extends State<GymApp> {
 class GymHomePage extends StatefulWidget {
   const GymHomePage({
     required this.restNotifications,
+    required this.noteReminders,
+    required this.hydrationReminders,
     required this.settings,
     required this.settingsError,
     required this.onThemeChanged,
@@ -219,6 +237,8 @@ class GymHomePage extends StatefulWidget {
   });
 
   final RestNotificationController restNotifications;
+  final NoteReminderController noteReminders;
+  final HydrationReminderController hydrationReminders;
   final AppSettings settings;
   final String? settingsError;
   final ValueChanged<ThemeMode> onThemeChanged;
@@ -236,11 +256,16 @@ class GymHomePage extends StatefulWidget {
 class _GymHomePageState extends State<GymHomePage> {
   int _selectedTab = 0;
   final WorkoutDataStore _workoutDataStore = WorkoutDataStore();
+  final ProfileDataStore _profileDataStore = ProfileDataStore();
+  final HydrationDataStore _hydrationDataStore = HydrationDataStore();
   final Set<DateTime> _completedWorkouts = {};
   final Map<DateTime, WorkoutPlan> _workouts = {
     dateOnly(DateTime.now()): planForType(workoutTypes.first),
   };
   final Map<DateTime, String> _dayNotes = {};
+  final List<PersonalNote> _personalNotes = [];
+  UserProfile _profile = const UserProfile();
+  int _waterIntakeMl = 0;
   late List<WorkoutPlan> _templates;
   DateTime _selectedDate = dateOnly(DateTime.now());
 
@@ -249,6 +274,99 @@ class _GymHomePageState extends State<GymHomePage> {
     super.initState();
     _templates = workoutTypes.map(planForType).toList();
     unawaited(_loadWorkoutData());
+    unawaited(_loadProfile());
+    unawaited(_loadWaterIntake());
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await _profileDataStore.load();
+      if (mounted) setState(() => _profile = profile);
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nie udało się wczytać profilu: $error')),
+      );
+    }
+  }
+
+  Future<void> _loadWaterIntake() async {
+    try {
+      final amount = await _hydrationDataStore.loadToday();
+      if (mounted) setState(() => _waterIntakeMl = amount);
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Nie udało się wczytać dzisiejszego nawodnienia: $error',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveProfile(UserProfile profile) async {
+    final previous = _profile;
+    try {
+      await _profileDataStore.save(profile);
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nie udało się zapisać profilu: $error')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _profile = profile);
+
+    final reminderSettingsChanged =
+        previous.waterReminderEnabled != profile.waterReminderEnabled ||
+        previous.waterReminderHour != profile.waterReminderHour ||
+        previous.waterReminderMinute != profile.waterReminderMinute ||
+        previous.dailyWaterTargetMl != profile.dailyWaterTargetMl;
+    if (!reminderSettingsChanged ||
+        (!previous.waterReminderEnabled && !profile.waterReminderEnabled)) {
+      return;
+    }
+
+    try {
+      final warning = await widget.hydrationReminders.updateHydrationReminder(
+        enabled: profile.waterReminderEnabled,
+        hour: profile.waterReminderHour,
+        minute: profile.waterReminderMinute,
+        targetMl: profile.dailyWaterTargetMl,
+        color: GymColors.of(context).accent,
+      );
+      if (warning != null && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(warning)));
+      }
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Nie udało się ustawić przypomnienia o wodzie: $error'),
+        ),
+      );
+    } on UnsupportedError catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Przypomnienia są niedostępne: $error')),
+      );
+    }
+  }
+
+  Future<void> _saveWaterIntake(int amountMl) async {
+    setState(() => _waterIntakeMl = amountMl);
+    try {
+      await _hydrationDataStore.saveToday(amountMl);
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nie udało się zapisać ilości wody: $error')),
+      );
+    }
   }
 
   Future<void> _loadWorkoutData() async {
@@ -269,6 +387,9 @@ class _GymHomePageState extends State<GymHomePage> {
         _dayNotes
           ..clear()
           ..addAll(snapshot.dayNotes);
+        _personalNotes
+          ..clear()
+          ..addAll(snapshot.personalNotes);
       });
     } on Exception catch (error) {
       if (!mounted) return;
@@ -284,6 +405,7 @@ class _GymHomePageState extends State<GymHomePage> {
         templates: _templates.skip(workoutTypes.length).toList(),
         scheduledWorkouts: _workouts,
         dayNotes: _dayNotes,
+        personalNotes: _personalNotes,
       );
     } on Exception catch (error) {
       if (!mounted) return;
@@ -344,6 +466,89 @@ class _GymHomePageState extends State<GymHomePage> {
     unawaited(_persistWorkoutData());
   }
 
+  Future<void> _savePersonalNote(PersonalNote note) async {
+    final previousIndex = _personalNotes.indexWhere(
+      (savedNote) => savedNote.id == note.id,
+    );
+    final previous = previousIndex < 0 ? null : _personalNotes[previousIndex];
+    setState(() {
+      if (previousIndex < 0) {
+        _personalNotes.add(note);
+      } else {
+        _personalNotes[previousIndex] = note;
+      }
+    });
+    await _persistWorkoutData();
+    if (!mounted) return;
+
+    final reminderAt = note.reminderAt;
+    if (reminderAt == null) {
+      if (previous?.reminderAt == null) return;
+      try {
+        await widget.noteReminders.cancelNoteReminder(note.id);
+      } on Exception catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Nie udało się anulować przypomnienia: $error'),
+          ),
+        );
+      } on UnsupportedError catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Przypomnienia są niedostępne: $error')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final warning = await widget.noteReminders.scheduleNoteReminder(
+        id: note.id,
+        title: note.title,
+        content: note.content,
+        reminderAt: reminderAt,
+        color: GymColors.of(context).accent,
+      );
+      if (warning != null && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(warning)));
+      }
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nie udało się ustawić przypomnienia: $error')),
+      );
+    } on UnsupportedError catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Przypomnienia są niedostępne: $error')),
+      );
+    }
+  }
+
+  Future<void> _deletePersonalNote(PersonalNote note) async {
+    setState(
+      () => _personalNotes.removeWhere((savedNote) => savedNote.id == note.id),
+    );
+    await _persistWorkoutData();
+    if (!mounted) return;
+    if (note.reminderAt == null) return;
+    try {
+      await widget.noteReminders.cancelNoteReminder(note.id);
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nie udało się anulować przypomnienia: $error')),
+      );
+    } on UnsupportedError catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Przypomnienia są niedostępne: $error')),
+      );
+    }
+  }
+
   void _saveWorkoutNote(DateTime date, String note) {
     final normalizedDate = dateOnly(date);
     final workout = _workouts[normalizedDate];
@@ -371,12 +576,13 @@ class _GymHomePageState extends State<GymHomePage> {
         completedWorkouts: _completedWorkouts,
         weeklyWorkoutGoal: widget.settings.weeklyWorkoutGoal,
         userId: defaultProfileId,
-        userName: widget.settings.showProfileName ? defaultProfileName : null,
+        userName: widget.settings.showProfileName ? _profile.displayName : null,
         workout: _planForDate(today),
         isTodayCompleted: _completedWorkouts.contains(today),
         onCompleteWorkout: () => _completeWorkout(today),
         onOpenPlan: () => setState(() => _selectedTab = 1),
         onOpenCalendar: () => setState(() => _selectedTab = 2),
+        onOpenProfile: () => setState(() => _selectedTab = 4),
         defaultRestSeconds: widget.settings.defaultRestSeconds,
         restNotifications: widget.restNotifications,
       ),
@@ -401,10 +607,17 @@ class _GymHomePageState extends State<GymHomePage> {
         onCompleteWorkout: _completeWorkout,
         restNotifications: widget.restNotifications,
       ),
+      NotesPage(
+        notes: _personalNotes,
+        onSaveNote: _savePersonalNote,
+        onDeleteNote: _deletePersonalNote,
+      ),
       ProfilePage(
         points: _points,
         completedWorkouts: _completedWorkouts,
         note: _dayNotes[today] ?? '',
+        profile: _profile,
+        waterIntakeMl: _waterIntakeMl,
         settings: widget.settings,
         settingsError: widget.settingsError,
         templates: _templates,
@@ -419,6 +632,8 @@ class _GymHomePageState extends State<GymHomePage> {
             widget.onWorkoutReminderScheduleChanged,
         onWeeklyWorkoutGoalChanged: widget.onWeeklyWorkoutGoalChanged,
         onSaveNote: (note) => _saveDayNote(today, note),
+        onSaveProfile: _saveProfile,
+        onWaterIntakeChanged: _saveWaterIntake,
       ),
     ];
 
@@ -454,6 +669,11 @@ class _GymHomePageState extends State<GymHomePage> {
               color: colors.accent,
             ),
             label: 'Kalendarz',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notes_rounded, color: colors.muted),
+            selectedIcon: Icon(Icons.notes_rounded, color: colors.accent),
+            label: 'Notatki',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded, color: colors.muted),

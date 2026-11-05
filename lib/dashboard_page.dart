@@ -23,6 +23,7 @@ class DashboardPage extends StatelessWidget {
     required this.onCompleteWorkout,
     required this.onOpenPlan,
     required this.onOpenCalendar,
+    required this.onOpenProfile,
     required this.defaultRestSeconds,
     required this.restNotifications,
     super.key,
@@ -41,6 +42,7 @@ class DashboardPage extends StatelessWidget {
   final VoidCallback onCompleteWorkout;
   final VoidCallback onOpenPlan;
   final VoidCallback onOpenCalendar;
+  final VoidCallback onOpenProfile;
   final int defaultRestSeconds;
   final RestNotificationController restNotifications;
 
@@ -49,7 +51,7 @@ class DashboardPage extends StatelessWidget {
     final colors = GymColors.of(context);
     return AppPage(
       children: [
-        const AppHeader(showAvatar: true),
+        AppHeader(showAvatar: true, onAvatarTap: onOpenProfile),
         const SizedBox(height: 22),
         Text(
           dashboardDateLabel(today),

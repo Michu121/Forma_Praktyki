@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:silownia_praktyki/app_colors.dart';
 import 'package:silownia_praktyki/app_settings.dart';
 import 'package:silownia_praktyki/date_helpers.dart';
+import 'package:silownia_praktyki/hydration_data_store.dart';
 import 'package:silownia_praktyki/main.dart';
 import 'package:silownia_praktyki/rest_notification_service.dart';
 import 'package:silownia_praktyki/workout_models.dart';
@@ -35,6 +36,131 @@ void main() {
     expect(find.text('Ćwiczenia i zapisane schematy'), findsOneWidget);
     expect(find.text('Wyciskanie sztangi'), findsOneWidget);
     expect(find.text('Zacznij trening'), findsNothing);
+  });
+
+  testWidgets('dashboard profile icon opens the profile page', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const GymApp());
+
+    await tester.tap(find.byType(IconButton).last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Michał Nowak'), findsOneWidget);
+  });
+
+  testWidgets('creates and restores multiple personal notes', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const GymApp());
+    await tester.tap(find.text('Notatki').last);
+    await tester.pumpAndSettle();
+
+    Future<void> createNote(String title, String content) async {
+      await tester.tap(find.text('Dodaj notatkę'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), title);
+      await tester.enterText(find.byType(TextField).at(1), content);
+      await tester.tap(find.text('Zapisz'));
+      await tester.pumpAndSettle();
+    }
+
+    await createNote('Lista zakupów', 'Woda i owoce.');
+    await createNote('Plan na jutro', 'Trening nóg.');
+
+    expect(find.text('Lista zakupów'), findsOneWidget);
+    expect(find.text('Plan na jutro'), findsOneWidget);
+
+    await tester.pumpWidget(const GymApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Notatki').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lista zakupów'), findsOneWidget);
+    expect(find.text('Plan na jutro'), findsOneWidget);
+  });
+
+  testWidgets('schedules a notification with the note contents', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final noteReminders = _RecordingNoteReminders();
+    await tester.pumpWidget(GymApp(noteReminders: noteReminders));
+    await tester.tap(find.text('Notatki').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dodaj notatkę'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'Ważne');
+    await tester.enterText(find.byType(TextField).at(1), 'Zadzwoń do trenera.');
+    await tester.ensureVisible(find.text('Przypomnij o notatce'));
+    await tester.tap(find.text('Przypomnij o notatce'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Zapisz'));
+    await tester.pumpAndSettle();
+
+    expect(noteReminders.schedules, hasLength(1));
+    expect(noteReminders.schedules.single.title, 'Ważne');
+    expect(noteReminders.schedules.single.content, 'Zadzwoń do trenera.');
+    expect(
+      noteReminders.schedules.single.reminderAt.isAfter(DateTime.now()),
+      isTrue,
+    );
+    expect(noteReminders.schedules.single.color, isNotNull);
+  });
+
+  testWidgets('edits profile details and tracks water intake', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final hydrationReminders = _RecordingHydrationReminders();
+    await tester.pumpWidget(GymApp(hydrationReminders: hydrationReminders));
+    await tester.tap(find.text('Profil'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Edytuj profil'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Edytuj profil'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Anna');
+    await tester.enterText(find.byType(TextField).at(1), 'Kowalska');
+    await tester.enterText(find.byType(TextField).at(2), 'Anka');
+    await tester.enterText(find.byType(TextField).at(3), '168');
+    await tester.enterText(find.byType(TextField).at(4), '62');
+    await tester.scrollUntilVisible(
+      find.text('Codzienne przypomnienie o wodzie'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Codzienne przypomnienie o wodzie'));
+    await tester.tap(find.text('Zapisz').last);
+    await tester.pumpAndSettle();
+
+    expect(hydrationReminders.schedules, hasLength(1));
+    expect(hydrationReminders.schedules.single.enabled, isTrue);
+    expect(hydrationReminders.schedules.single.targetMl, 2250);
+
+    await tester.drag(
+      find.byType(CustomScrollView).last,
+      const Offset(0, 1000),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Anka'), findsOneWidget);
+    expect(find.text('168 cm • 62.0 kg'), findsOneWidget);
+    final waterButton = find.widgetWithText(OutlinedButton, '250 ml');
+    await tester.ensureVisible(waterButton);
+    await tester.tap(waterButton);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('0.3 l / 2.3 l'), findsOneWidget);
+    expect(await HydrationDataStore().loadToday(), 250);
   });
 
   test('exercise catalog includes home, gym, and outdoor options', () {
@@ -528,14 +654,19 @@ void main() {
   testWidgets('calculates BMI from height and weight', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const GymApp());
     await tester.tap(find.text('Profil'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Kalkulator BMI'),
       100,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find.byType(Scrollable).last,
     );
+    await tester.ensureVisible(find.text('Kalkulator BMI'));
     await tester.tap(find.text('Kalkulator BMI'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '170');
@@ -652,17 +783,21 @@ void main() {
     await tester.tap(find.text('Pokaż nazwę profilu'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('Jakie dane są używane?'),
+      find.text('Dane i przechowywanie').last,
       120,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Gdzie są przechowywane?'), findsOneWidget);
+    await tester.tap(find.text('Dane i przechowywanie').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Jakie dane są używane?'), findsOneWidget);
     await tester.tap(find.text('Jakie dane są używane?'));
     await tester.pumpAndSettle();
     expect(
       find.textContaining('Nie wymaga rejestracji konta.'),
       findsOneWidget,
     );
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
 
@@ -751,4 +886,54 @@ class _RecordingWorkoutReminders implements WorkoutReminderController {
     ));
     return null;
   }
+}
+
+class _RecordingHydrationReminders implements HydrationReminderController {
+  final List<({bool enabled, int hour, int minute, int targetMl})> schedules =
+      [];
+
+  @override
+  Future<String?> updateHydrationReminder({
+    required bool enabled,
+    required int hour,
+    required int minute,
+    required int targetMl,
+    required Color color,
+  }) async {
+    schedules.add((
+      enabled: enabled,
+      hour: hour,
+      minute: minute,
+      targetMl: targetMl,
+    ));
+    return null;
+  }
+}
+
+class _RecordingNoteReminders implements NoteReminderController {
+  final List<
+    ({int id, String title, String content, DateTime reminderAt, Color color})
+  >
+  schedules = [];
+
+  @override
+  Future<String?> scheduleNoteReminder({
+    required int id,
+    required String title,
+    required String content,
+    required DateTime reminderAt,
+    required Color color,
+  }) async {
+    schedules.add((
+      id: id,
+      title: title,
+      content: content,
+      reminderAt: reminderAt,
+      color: color,
+    ));
+    return null;
+  }
+
+  @override
+  Future<void> cancelNoteReminder(int id) async {}
 }

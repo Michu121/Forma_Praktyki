@@ -40,6 +40,9 @@ dependencies:
   timezone: ^0.11.2
   crypto: ^3.0.8
   flutter_timezone: ^5.1.1
+  image_picker: ^1.2.0
+  path_provider: ^2.1.5
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

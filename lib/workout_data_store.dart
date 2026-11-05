@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'date_helpers.dart';
+import 'personal_note.dart';
 import 'workout_models.dart';
 
 class WorkoutDataSnapshot {
@@ -11,11 +12,13 @@ class WorkoutDataSnapshot {
     required this.templates,
     required this.scheduledWorkouts,
     required this.dayNotes,
+    required this.personalNotes,
   });
 
   final List<WorkoutPlan> templates;
   final Map<DateTime, WorkoutPlan> scheduledWorkouts;
   final Map<DateTime, String> dayNotes;
+  final List<PersonalNote> personalNotes;
 }
 
 class WorkoutDataStore {
@@ -40,10 +43,14 @@ class WorkoutDataStore {
     for (final entry in (data['notes'] as Map<String, dynamic>).entries) {
       notes[dateOnly(DateTime.parse(entry.key))] = entry.value as String;
     }
+    final personalNotes = (data['personalNotes'] as List<dynamic>? ?? [])
+        .map((item) => _decodePersonalNote(item as Map<String, dynamic>))
+        .toList();
     return WorkoutDataSnapshot(
       templates: templates,
       scheduledWorkouts: scheduled,
       dayNotes: notes,
+      personalNotes: personalNotes,
     );
   }
 
@@ -51,6 +58,7 @@ class WorkoutDataStore {
     required List<WorkoutPlan> templates,
     required Map<DateTime, WorkoutPlan> scheduledWorkouts,
     required Map<DateTime, String> dayNotes,
+    required List<PersonalNote> personalNotes,
   }) async {
     final preferences = await SharedPreferences.getInstance();
     final saved = await preferences.setString(
@@ -65,6 +73,7 @@ class WorkoutDataStore {
           for (final entry in dayNotes.entries)
             _dateKey(entry.key): entry.value,
         },
+        'personalNotes': personalNotes.map(_encodePersonalNote).toList(),
       }),
     );
     if (!saved) throw StateError('Nie udało się zapisać planów treningowych.');
@@ -83,6 +92,23 @@ class WorkoutDataStore {
     'restSeconds': plan.restSeconds,
     'note': plan.note,
   };
+
+  static Map<String, Object?> _encodePersonalNote(PersonalNote note) => {
+    'id': note.id,
+    'title': note.title,
+    'content': note.content,
+    'reminderAt': note.reminderAt?.toIso8601String(),
+  };
+
+  static PersonalNote _decodePersonalNote(Map<String, dynamic> json) =>
+      PersonalNote(
+        id: json['id'] as int,
+        title: json['title'] as String,
+        content: json['content'] as String,
+        reminderAt: json['reminderAt'] == null
+            ? null
+            : DateTime.parse(json['reminderAt'] as String),
+      );
 
   static WorkoutPlan _decodeWorkout(Map<String, dynamic> json) {
     final typeName = json['type'] as String;

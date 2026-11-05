@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_settings.dart';
 import 'common_widgets.dart';
+import 'data_storage_page.dart';
 import 'rest_duration_picker.dart';
 import 'workout_builder_sheet.dart';
 import 'workout_models.dart';
@@ -421,69 +422,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          AppSurfaceCard(
-            child: _PrivacyArticle(
-              title: 'Jakie dane są używane?',
-              icon: Icons.dataset_outlined,
-              content:
-                  'Aplikacja korzysta z ustawień, schematów treningowych, '
-                  'zaplanowanych treningów oraz notatek, które zapisujesz. '
-                  'Nie wymaga rejestracji konta.',
-            ),
-          ),
-          const SizedBox(height: 8),
-          AppSurfaceCard(
-            child: _PrivacyArticle(
-              title: 'Gdzie są przechowywane?',
-              icon: Icons.phone_android_rounded,
-              content:
-                  'Ustawienia, schematy, kalendarz i notatki są zapisywane '
-                  'lokalnie na tym urządzeniu. Aplikacja nie synchronizuje '
-                  'ich z kontem internetowym. Historia ukończonych treningów '
-                  'jest obecnie dostępna tylko w bieżącej sesji aplikacji.',
-            ),
-          ),
-          const SizedBox(height: 8),
-          AppSurfaceCard(
-            child: _PrivacyArticle(
-              title: 'Co zmieniają ustawienia profilu?',
-              icon: Icons.visibility_outlined,
-              content:
-                  'Wyłączenie nazwy lub statystyk ukrywa je w widoku profilu '
-                  '(nazwa również w powitaniu). Nie usuwa zapisanych '
-                  'schematów, notatek ani ustawień.',
-            ),
-          ),
-          const SizedBox(height: 8),
-          AppSurfaceCard(
-            child: _PrivacyArticle(
-              title: 'Powiadomienia i uprawnienia',
-              icon: Icons.notifications_none_rounded,
-              content:
-                  'Przypomnienia o treningu są planowane na urządzeniu. '
-                  'System może poprosić o zgodę na powiadomienia i alarmy. '
-                  'Uprawnieniami możesz zarządzać również w ustawieniach '
-                  'systemowych telefonu.',
-            ),
-          ),
-          const SizedBox(height: 8),
-          AppSurfaceCard(
-            child: _PrivacyArticle(
-              title: 'Jak usunąć dane?',
-              icon: Icons.delete_outline_rounded,
-              content:
-                  'Aplikacja nie ma jeszcze przycisku usuwania wszystkich '
-                  'danych. Lokalne dane aplikacji możesz usunąć w ustawieniach '
-                  'systemowych telefonu, czyszcząc jej pamięć lub '
-                  'odinstalowując aplikację.',
-            ),
-          ),
           const SizedBox(height: 25),
           const AppSectionHeading(
-            icon: Icons.info_outline_rounded,
-            title: 'Informacje',
-            subtitle: 'Przejrzyste zasady działania aplikacji.',
+            icon: Icons.storage_outlined,
+            title: 'Dane i przechowywanie',
+            subtitle: 'Zobacz, co zapisuje aplikacja i gdzie.',
           ),
           const SizedBox(height: 10),
           AppSurfaceCard(
@@ -491,9 +434,14 @@ class _SettingsPageState extends State<SettingsPage> {
               leading: Icon(Icons.storage_outlined, color: colors.accent),
               title: const Text('Dane i przechowywanie'),
               subtitle: const Text(
-                'Ustawienia są zapisywane lokalnie na tym urządzeniu.',
+                'Informacje o danych, powiadomieniach i ich usuwaniu.',
               ),
-              onTap: () => _showStorageInfo(context),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => const DataStoragePage(),
+                ),
+              ),
             ),
           ),
         ],
@@ -536,69 +484,11 @@ class _SettingsPageState extends State<SettingsPage> {
     widget.onCreateTemplate(template);
   }
 
-  void _showStorageInfo(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Twoje dane'),
-        content: const Text(
-          'Ustawienia, schematy, zaplanowane treningi i notatki są zapisywane '
-          'lokalnie na tym urządzeniu. Aplikacja nie wymaga konta online ani '
-          'nie synchronizuje tych danych. Historia ukończonych treningów jest '
-          'dostępna tylko w bieżącej sesji. Aby usunąć zapisane dane, wyczyść '
-          'pamięć aplikacji lub odinstaluj ją w ustawieniach telefonu.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Rozumiem'),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _themeName(ThemeMode mode) => switch (mode) {
     ThemeMode.system => 'Zgodny z ustawieniami systemu',
     ThemeMode.light => 'Jasny',
     ThemeMode.dark => 'Ciemny',
   };
-}
-
-class _PrivacyArticle extends StatelessWidget {
-  const _PrivacyArticle({
-    required this.title,
-    required this.icon,
-    required this.content,
-  });
-
-  final String title;
-  final IconData icon;
-  final String content;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = GymColors.of(context);
-    return ExpansionTile(
-      leading: Icon(icon, color: colors.accent),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: colors.foreground,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      expandedCrossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          content,
-          style: TextStyle(color: colors.muted, fontSize: 13, height: 1.5),
-        ),
-      ],
-    );
-  }
 }
 
 class _SettingsErrorBanner extends StatelessWidget {

@@ -24,9 +24,10 @@ class AppPage extends StatelessWidget {
 }
 
 class AppHeader extends StatelessWidget {
-  const AppHeader({this.showAvatar = false, super.key});
+  const AppHeader({this.showAvatar = false, this.onAvatarTap, super.key});
 
   final bool showAvatar;
+  final VoidCallback? onAvatarTap;
 
   @override
   Widget build(BuildContext context) {
@@ -65,14 +66,18 @@ class AppHeader extends StatelessWidget {
             icon: Icon(Icons.notifications_none_rounded, color: colors.muted),
           ),
           const SizedBox(width: 4),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: colors.surfaceLight,
-              borderRadius: BorderRadius.circular(13),
+          IconButton(
+            tooltip: 'Profil',
+            onPressed: onAvatarTap,
+            icon: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: colors.surfaceLight,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(Icons.person_rounded, size: 21, color: colors.accent),
             ),
-            child: Icon(Icons.person_rounded, size: 21, color: colors.accent),
           ),
         ] else
           Text(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:live_activities/live_activities.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -25,8 +26,34 @@ abstract interface class WorkoutReminderController {
   });
 }
 
+abstract interface class NoteReminderController {
+  Future<String?> scheduleNoteReminder({
+    required int id,
+    required String title,
+    required String content,
+    required DateTime reminderAt,
+    required Color color,
+  });
+
+  Future<void> cancelNoteReminder(int id);
+}
+
+abstract interface class HydrationReminderController {
+  Future<String?> updateHydrationReminder({
+    required bool enabled,
+    required int hour,
+    required int minute,
+    required int targetMl,
+    required Color color,
+  });
+}
+
 class RestNotificationService
-    implements RestNotificationController, WorkoutReminderController {
+    implements
+        RestNotificationController,
+        WorkoutReminderController,
+        NoteReminderController,
+        HydrationReminderController {
   RestNotificationService._();
 
   static final RestNotificationService instance = RestNotificationService._();
@@ -40,6 +67,11 @@ class RestNotificationService
   static const _finishedTitle = 'Koniec przerwy';
   static const _finishedBody = 'Pora na serię.';
   static const _workoutReminderIdBase = 71000;
+  static const _noteReminderChannelId = 'forma_note_reminders';
+  static const _noteReminderChannelName = 'Przypomnienia o notatkach';
+  static const _hydrationReminderId = 71010;
+  static const _hydrationReminderChannelId = 'forma_hydration_reminders';
+  static const _hydrationReminderChannelName = 'Przypomnienia o wodzie';
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -216,6 +248,148 @@ class RestNotificationService
 
     if (Platform.isAndroid && !_exactAlarmsAllowed) {
       return 'Przypomnienia zapisano, ale bez alarmów dokładnych mogą pojawić się z opóźnieniem.';
+    }
+    return null;
+  }
+
+  @override
+  Future<String?> scheduleNoteReminder({
+    required int id,
+    required String title,
+    required String content,
+    required DateTime reminderAt,
+    required Color color,
+  }) async {
+    await _ensureInitialized();
+    if (!reminderAt.isAfter(DateTime.now())) {
+      throw ArgumentError.value(
+        reminderAt,
+        'reminderAt',
+        'Przypomnienie musi być ustawione na przyszłość.',
+      );
+    }
+
+    final permissionGranted = await _requestNotificationPermission();
+    if (!permissionGranted) {
+      return 'Włącz powiadomienia w ustawieniach urządzenia, aby otrzymać przypomnienie o notatce.';
+    }
+
+    if (Platform.isAndroid) {
+      await _requestExactAlarmPermissionIfNeeded();
+    } else {
+      _exactAlarmsAllowed = true;
+    }
+
+    await _notifications.zonedSchedule(
+      id: id,
+      title: title,
+      body: content,
+      scheduledDate: timezone.TZDateTime.from(reminderAt, timezone.local),
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _noteReminderChannelId,
+          _noteReminderChannelName,
+          channelDescription: 'Przypomnienia o zapisanych notatkach',
+          category: AndroidNotificationCategory.reminder,
+          importance: Importance.high,
+          priority: Priority.high,
+          color: color,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBanner: true,
+          presentList: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: _exactAlarmsAllowed
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle,
+    );
+
+    if (Platform.isAndroid && !_exactAlarmsAllowed) {
+      return 'Przypomnienie zapisano, ale bez alarmów dokładnych może pojawić się z opóźnieniem.';
+    }
+    return null;
+  }
+
+  @override
+  Future<void> cancelNoteReminder(int id) async {
+    await _ensureInitialized();
+    await _notifications.cancel(id: id);
+  }
+
+  @override
+  Future<String?> updateHydrationReminder({
+    required bool enabled,
+    required int hour,
+    required int minute,
+    required int targetMl,
+    required Color color,
+  }) async {
+    await _ensureInitialized();
+    await _notifications.cancel(id: _hydrationReminderId);
+    if (!enabled) return null;
+
+    final permissionGranted = await _requestNotificationPermission();
+    if (!permissionGranted) {
+      return 'Włącz powiadomienia w ustawieniach urządzenia, aby otrzymywać przypomnienia o wodzie.';
+    }
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || targetMl <= 0) {
+      throw ArgumentError('Nieprawidłowe ustawienia przypomnienia o wodzie.');
+    }
+
+    if (Platform.isAndroid) {
+      await _requestExactAlarmPermissionIfNeeded();
+    } else {
+      _exactAlarmsAllowed = true;
+    }
+
+    final now = timezone.TZDateTime.now(timezone.local);
+    var reminderAt = timezone.TZDateTime(
+      timezone.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+    if (!reminderAt.isAfter(now)) {
+      reminderAt = reminderAt.add(const Duration(days: 1));
+    }
+
+    await _notifications.zonedSchedule(
+      id: _hydrationReminderId,
+      title: 'Pamiętaj o piciu wody',
+      body:
+          'Twój orientacyjny dzienny cel to ${(targetMl / 1000).toStringAsFixed(1)} l całkowitej wody.',
+      scheduledDate: reminderAt,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _hydrationReminderChannelId,
+          _hydrationReminderChannelName,
+          channelDescription: 'Codzienne przypomnienie o nawodnieniu',
+          category: AndroidNotificationCategory.reminder,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          color: color,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBanner: true,
+          presentList: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: _exactAlarmsAllowed
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+
+    if (Platform.isAndroid && !_exactAlarmsAllowed) {
+      return 'Przypomnienie zapisano, ale bez alarmów dokładnych może pojawić się z opóźnieniem.';
     }
     return null;
   }

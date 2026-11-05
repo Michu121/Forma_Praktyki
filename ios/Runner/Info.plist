@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Wybierz zdjęcie, które chcesz ustawić jako zdjęcie profilowe.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
